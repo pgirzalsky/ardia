@@ -70,18 +70,21 @@ export const SCOPE_CHIP = {
 } as const;
 
 export const SUGGESTION = {
-  listX: 8,
-  dropdownListX: space.s,
-  listBelow: space.xxs,
-  dropdownListBelow: space.s,
-  height: 36,
-  gapY: 2,
-  radius: radius.tile,
-  padX: 13,
-  gap: 11,
-  icon: 13,
-  calcIcon: 14,
-  iconBox: 16,
+  listX: 10,
+  dropdownListX: 10,
+  listBelow: 10,
+  dropdownListBelow: 10,
+  height: 50,
+  gapY: 1,
+  radius: radius.chrome,
+  padX: 14,
+  gap: 14,
+  icon: 15,
+  calcIcon: 15,
+  iconBox: 26,
+  plateRadius: 6,
+  plateFill: { dark: "rgba(255,255,255,0.14)", light: "rgba(0,0,0,0.06)" },
+  favicon: 18,
 } as const;
 
 export const SELECTED_SUGGESTION_ALPHA = { dark: 0.56, light: 0.3 } as const;

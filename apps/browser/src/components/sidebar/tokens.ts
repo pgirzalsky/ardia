@@ -26,6 +26,7 @@ const DARK = {
   engineMarkPlate: "#2C2C2E",
   incognitoBadge: "rgba(255,255,255,0.08)",
   tileGlow: "#FFFFFF",
+  tabSelectedFill: "rgba(255,255,255,0.13)",
   fieldButtonPlate: "rgba(255,255,255,0.08)",
 };
 
@@ -51,6 +52,7 @@ const LIGHT: typeof DARK = {
   engineMarkPlate: "#FFFFFF",
   incognitoBadge: "rgba(0,0,0,0.06)",
   tileGlow: "#000000",
+  tabSelectedFill: "rgba(255,255,255,0.74)",
   fieldButtonPlate: "rgba(255,255,255,0.75)",
 };
 
@@ -81,13 +83,13 @@ export const SIDEBAR_MOTION = { liveFold: duration.long, fold: duration.base, li
 export const HOVER_CARD_IN_SPRING = { response: 0.25, damping: 0.75 } as const;
 export const HOVER_CARD_OUT_SPRING = { response: 0.2, damping: 0.6 } as const;
 
-export const TAB_ROW = { contentLeft: 9, trailing: 6, titleGap: 5, titleHeight: 18, compactTitleHeight: 17, closeSlot: 22 } as const;
+export const TAB_ROW = { contentLeft: 10, trailing: 6, titleGap: 11, titleHeight: 18, compactTitleHeight: 17, closeSlot: 22 } as const;
 
 export const TILE_RIM = 1;
 
 export const TABULAR_NUMS: ("tabular-nums")[] = ["tabular-nums"];
 
-export const SIDEBAR_TYPE = { compact: font.small.fontSize } as const;
+export const SIDEBAR_TYPE = { compact: font.small.fontSize, row: 14 } as const;
 
 export function groupTint(color: GroupColor | null | undefined): string | null {
   return color && color !== "none" ? (GROUP_COLORS[color]?.hex ?? null) : null;

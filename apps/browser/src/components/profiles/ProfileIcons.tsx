@@ -61,9 +61,9 @@ export function switcherIcons(icons: (string | null)[], shown: boolean, room: nu
 }
 
 export function SwitcherMark({ icon, color, scale = 1 }: { icon: string | null; color: string; scale?: number }) {
-  const { iconCell, icon: size, dot } = profileSwitcher;
+  const { iconCell, icon: size, symbol: symbolSize, dot } = profileSwitcher;
   const symbol = iconSymbol(icon);
-  if (symbol) return <Symbol name={symbol} size={size * scale} weight="semibold" color={color} style={{ width: iconCell * scale, height: iconCell * scale }} />;
+  if (symbol) return <Symbol name={symbol} size={symbolSize * scale} weight="medium" color={color} style={{ width: iconCell * scale, height: iconCell * scale }} />;
   if (icon)
     return (
       <Text numberOfLines={1} style={{ width: iconCell * scale, fontSize: size * scale, lineHeight: iconCell * scale, textAlign: "center", color }}>

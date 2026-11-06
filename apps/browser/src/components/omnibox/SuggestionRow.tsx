@@ -1,11 +1,20 @@
 import { displayHost, displayUrl, hostOf, type Suggestion } from "@ardia/core";
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { Image, Pressable, Text as NativeText, View } from "react-native";
 import { Button, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
 import { Favicon } from "../favicon/Favicon";
 import { SELECTED_SUGGESTION_ALPHA, SUGGESTION } from "./tokens";
 
 const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox } as const;
+
+function IconPlate({ children }: { children: ReactNode }) {
+  const theme = useTheme();
+  return (
+    <View style={{ ...ICON_BOX, borderRadius: SUGGESTION.plateRadius, alignItems: "center", justifyContent: "center", backgroundColor: theme.dark ? SUGGESTION.plateFill.dark : SUGGESTION.plateFill.light }}>
+      {children}
+    </View>
+  );
+}
 
 const selectedFill = (theme: Theme) =>
   theme.powerUpColor ? withAlpha(theme.powerUpColor, theme.dark ? SELECTED_SUGGESTION_ALPHA.dark : SELECTED_SUGGESTION_ALPHA.light) : theme.commandBarSelected;
@@ -15,9 +24,9 @@ export function SuggestionIcon({ suggestion: s, color }: { suggestion: Suggestio
   const tint = color ?? theme.textSecondary;
   switch (s.kind) {
     case "page":
-      return <Favicon url={s.url} favicon={s.favicon} />;
+      return <Favicon url={s.url} favicon={s.favicon} size={SUGGESTION.favicon} />;
     case "create":
-      return <Favicon url={`https://${s.site}`} />;
+      return <Favicon url={`https://${s.site}`} size={SUGGESTION.favicon} />;
     case "search":
       return <Symbol name="magnifyingglass" size={SUGGESTION.icon} color={tint} style={ICON_BOX} />;
     case "calc":
@@ -31,7 +40,7 @@ export function SuggestionIcon({ suggestion: s, color }: { suggestion: Suggestio
         <Symbol name="puzzlepiece.extension" size={SUGGESTION.icon} color={tint} style={ICON_BOX} />
       );
     case "provider":
-      return <Favicon url={s.url} favicon={s.icon} />;
+      return <Favicon url={s.url} favicon={s.icon} size={SUGGESTION.favicon} />;
   }
 }
 
@@ -131,7 +140,9 @@ const SuggestionRow = memo(
               backgroundColor: selected ? selectedFill(theme) : hovered ? theme.commandBarHover : undefined,
             }}
           >
-            <SuggestionIcon suggestion={s} />
+            <IconPlate>
+              <SuggestionIcon suggestion={s} />
+            </IconPlate>
             <Text lines={1} size="title" style={{ flexShrink: 1 }}>
               {title}
               {accessory ? (
