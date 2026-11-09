@@ -12,8 +12,13 @@ import { modifiersOf } from "../../lib/keys";
 import { useClipped, useShift, type ClipSource } from "./EntryMotion";
 import { TAB_ROW, useSidebarTokens } from "./tokens";
 import { SidebarRowLabel } from "./SidebarRow";
+import { onLayoutMode } from "../../lib/layoutMode";
 
-const CLIPPED = { marginTop: -layout.rowGap, paddingTop: layout.rowGap, overflow: "hidden" } as const;
+const CLIPPED = { marginTop: -layout.rowGap, paddingTop: layout.rowGap, overflow: "hidden" } as { marginTop: number; paddingTop: number; overflow: "hidden" };
+onLayoutMode(() => {
+  CLIPPED.marginTop = -layout.rowGap;
+  CLIPPED.paddingTop = layout.rowGap;
+});
 const NEW_TAB_LABEL_X = 30;
 const CLEANED_HINT_RIGHT = 30;
 const CLEANED_HINT_GAP = space.m;

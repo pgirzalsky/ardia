@@ -1,8 +1,12 @@
 import { layout } from "../ui/theme";
+import { onLayoutMode } from "../../lib/layoutMode";
 import type { Section } from "../../state/sidebar/geometry";
 
 export const GLOW_ROOM = 24;
-export const ROW_PITCH = layout.rowHeight + layout.rowGap;
+export let ROW_PITCH = layout.rowHeight + layout.rowGap;
+onLayoutMode(() => {
+  ROW_PITCH = layout.rowHeight + layout.rowGap;
+});
 export const DOCKED_BOTTOM = 6;
 export const ROWS_PER_FRAME = 32;
 export const DOCK_SHARE = 0.4;

@@ -12,9 +12,14 @@ import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
 import { openProfileItemMenu } from "./profileMenu";
 import { profileSwitcher } from "./tokens";
+import { onLayoutMode } from "../../lib/layoutMode";
 
-export const PROFILE_DOTS_HEIGHT = profileSwitcher.height;
-const { band: BAND, dotTooltipLift } = profileSwitcher;
+export let PROFILE_DOTS_HEIGHT = profileSwitcher.height;
+let { band: BAND, dotTooltipLift } = profileSwitcher;
+onLayoutMode(() => {
+  PROFILE_DOTS_HEIGHT = profileSwitcher.height;
+  ({ band: BAND, dotTooltipLift } = profileSwitcher);
+});
 const SIDE_ROOM = layout.sidebarInset;
 const SIDE_ROOM_BESIDE_DOWNLOADS = layout.sidebarInset + SIDEBAR_FOOTER_DOWNLOADS.size + 4;
 

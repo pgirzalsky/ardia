@@ -5,6 +5,7 @@ import { SLIDE } from "../tabstrip/tokens";
 import { TILE_GAP } from "./pinZone";
 import { folderIdOfCell } from "../../state/pins/tileFolders";
 import { entryKey } from "../../state/sidebar/entryKey";
+import { onLayoutMode } from "../../lib/layoutMode";
 
 export type Frame = { x: number; y: number; w: number; h: number };
 export type Section = "tiles" | "pinnedRows" | "pinnedGroups" | "list" | "folder";
@@ -47,8 +48,12 @@ export const cellKey = (cell: string) => {
 
 export type Ghost = { item: Item; count: number; width: number; height: number; position: Animated.ValueXY; landing?: boolean };
 
-export const ROW_GAP = layout.rowGap;
+export let ROW_GAP = layout.rowGap;
 export const RESTING_TAIL = { marginTop: -ROW_GAP };
+onLayoutMode(() => {
+  ROW_GAP = layout.rowGap;
+  RESTING_TAIL.marginTop = -ROW_GAP;
+});
 export const PIN_SLOT = layout.pinnedHeight + TILE_GAP;
 export const EDGE = 28;
 export const FOLDER_HOLD_MS = 400;

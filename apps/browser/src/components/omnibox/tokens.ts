@@ -1,3 +1,4 @@
+import { onLayoutMode, pick } from "../../lib/layoutMode";
 import { curve } from "../ui/motion";
 import { capsule, font, radius, space } from "../ui/tokens";
 
@@ -69,7 +70,25 @@ export const SCOPE_CHIP = {
   maxWidth: 220,
 } as const;
 
-export const SUGGESTION = {
+const SUGGESTION_STANDARD = {
+  listX: 8,
+  dropdownListX: space.s as number,
+  listBelow: space.xxs as number,
+  dropdownListBelow: space.s as number,
+  height: 36,
+  gapY: 2,
+  radius: radius.tile as number,
+  padX: 13,
+  gap: 11,
+  icon: 13,
+  calcIcon: 14,
+  iconBox: 16,
+  plateRadius: 0,
+  plateFill: { dark: "transparent", light: "transparent" },
+  favicon: undefined as number | undefined,
+};
+
+const SUGGESTION_LOOSE: typeof SUGGESTION_STANDARD = {
   listX: 10,
   dropdownListX: 10,
   listBelow: 10,
@@ -85,7 +104,11 @@ export const SUGGESTION = {
   plateRadius: 6,
   plateFill: { dark: "rgba(255,255,255,0.14)", light: "rgba(0,0,0,0.06)" },
   favicon: 18,
-} as const;
+};
+
+export const SUGGESTION: typeof SUGGESTION_STANDARD = { ...SUGGESTION_STANDARD };
+
+onLayoutMode((m) => Object.assign(SUGGESTION, pick(SUGGESTION_STANDARD, SUGGESTION_LOOSE, m)));
 
 export const SELECTED_SUGGESTION_ALPHA = { dark: 0.56, light: 0.3 } as const;
 

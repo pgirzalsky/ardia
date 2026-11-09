@@ -1,6 +1,7 @@
 import { setAppearance, setThinScrollBars } from "../../platform/app";
 import { setAutoPictureInPicture, setVideoUpscaling } from "../../platform/media";
 import { setCommandScrollZoom } from "../../platform/siteSettings";
+import { setLayoutMode } from "../../lib/layoutMode";
 import { useBrowser } from "../browser/store";
 import type { Settings } from "./settings";
 
@@ -19,6 +20,7 @@ const NATIVE_SETTINGS: Mirror[] = [
 export function startNativeSettings() {
   const sent = new Map<keyof Settings, unknown>();
   const sync = (settings: Settings) => {
+    setLayoutMode(settings.layout);
     for (const { key, send } of NATIVE_SETTINGS) {
       if (sent.has(key) && sent.get(key) === settings[key]) continue;
       sent.set(key, settings[key]);

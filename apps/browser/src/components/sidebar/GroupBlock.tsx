@@ -6,7 +6,8 @@ import { updateGroup } from "../../state/groups/actions";
 import { useGroupLabel } from "../../state/groups/hooks";
 import { useSelectionInGroup } from "../../state/pins/hooks";
 import { newCapture } from "../../state/sidebar/listCapture";
-import { useCapturedGroupEntries, useGroupTabIds, useKeptEntry } from "../../state/sidebar/hooks";
+import { useCapturedGroupEntries, useGroupFirstTabIcon, useGroupTabIds, useKeptEntry } from "../../state/sidebar/hooks";
+import { isLoose } from "../../lib/layoutMode";
 import { MeetingTimeLabel, useMeetingCountdown } from "../live/MeetingCountdown";
 import { HoverSlot } from "../ui/HoverSlot";
 import { Button, ContextMenuArea, FadeLabel, font, ink, space, Symbol, Text, weight, withAlpha } from "../ui";
@@ -175,6 +176,8 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
   const tokens = useSidebarTokens();
   const group = useGroup(groupId, (g) => g);
   const label = useGroupLabel(groupId);
+  const firstTab = useGroupFirstTabIcon(groupId);
+  const loose = isLoose();
   const renaming = useSidebarUi((u) => u.renaming?.kind === "group" && u.renaming.id === groupId);
   const dropInto = useDropInto() === groupId;
   const { hovered, hoverProps } = useRowHover(windowId, collapsed && !renaming ? { kind: "group", id: groupId } : null);
@@ -199,7 +202,11 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
         >
           {({ pressed }) => (
             <SidebarRowSurface fill={dropInto || pressed ? theme.tabPressed : hovered ? tokens.groupHeaderHover : ink.clear} cornerRadius={GROUP_INNER_RADIUS}>
-              {group.icon ? (
+              {!loose && (group.icon || firstTab) ? (
+                <TabIcon url={firstTab?.url ?? ""} favicon={firstTab?.favicon} icon={group.icon ?? firstTab?.customIcon} profileId={firstTab?.profileId} />
+              ) : !loose ? (
+                <View style={{ width: 16 }} />
+              ) : group.icon ? (
                 <TabIcon url="" icon={group.icon} />
               ) : (
                 <Symbol name={collapsed ? "folder.fill" : "folder"} size={14} weight="medium" color={theme.icon} style={{ width: 16, height: 16 }} />

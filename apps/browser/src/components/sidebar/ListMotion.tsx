@@ -13,12 +13,16 @@ import { curve } from "../ui/motion";
 import { SIDEBAR_MOTION } from "./tokens";
 import { entryId, entryKey, parseEntry } from "../../state/sidebar/entryKey";
 import { splitTabIdsOf } from "../../state/splits/splits";
+import { onLayoutMode } from "../../lib/layoutMode";
 
 export const SLIDE_MS = SIDEBAR_MOTION.listSlide;
 export const FADE_MS = SIDEBAR_MOTION.listFade;
 export const SLIDE_EASING = curve.cssEase;
 export const FADE_EASING = curve.cssEaseOut;
-const GAP = layout.rowGap;
+let GAP = layout.rowGap;
+onLayoutMode(() => {
+  GAP = layout.rowGap;
+});
 const TAIL = "~tail";
 const FRAME_SLACK_MS = 50;
 const devScale = () => (__DEV__ ? ((globalThis as { sidebarMotionScale?: number }).sidebarMotionScale ?? 1) : 1);

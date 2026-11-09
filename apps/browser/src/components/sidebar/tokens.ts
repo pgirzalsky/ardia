@@ -1,3 +1,4 @@
+import { onLayoutMode, pick } from "../../lib/layoutMode";
 import { useTheme } from "../ui/theme";
 import { duration } from "../ui/motion";
 import { font, ink, shadow, withAlpha, type ShadowLevel } from "../ui/tokens";
@@ -83,13 +84,19 @@ export const SIDEBAR_MOTION = { liveFold: duration.long, fold: duration.base, li
 export const HOVER_CARD_IN_SPRING = { response: 0.25, damping: 0.75 } as const;
 export const HOVER_CARD_OUT_SPRING = { response: 0.2, damping: 0.6 } as const;
 
-export const TAB_ROW = { contentLeft: 10, trailing: 6, titleGap: 11, titleHeight: 18, compactTitleHeight: 17, closeSlot: 22 } as const;
+export const TAB_ROW = { contentLeft: 9, trailing: 6, titleGap: 5, titleHeight: 18, compactTitleHeight: 17, closeSlot: 22 };
+
+onLayoutMode((m) => Object.assign(TAB_ROW, pick({ contentLeft: 9, titleGap: 5 }, { contentLeft: 10, titleGap: 11 }, m)));
 
 export const TILE_RIM = 1;
 
 export const TABULAR_NUMS: ("tabular-nums")[] = ["tabular-nums"];
 
-export const SIDEBAR_TYPE = { compact: font.small.fontSize, row: 14 } as const;
+export const SIDEBAR_TYPE = { compact: font.small.fontSize, row: font.body.fontSize as number };
+
+onLayoutMode((m) => {
+  SIDEBAR_TYPE.row = pick(font.body.fontSize, 14, m);
+});
 
 export function groupTint(color: GroupColor | null | undefined): string | null {
   return color && color !== "none" ? (GROUP_COLORS[color]?.hex ?? null) : null;

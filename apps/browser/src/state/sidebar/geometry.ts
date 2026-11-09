@@ -1,4 +1,5 @@
 import { SIDEBAR_GROUP, SIDEBAR_ROW } from "../../lib/sidebarMetrics";
+import { onLayoutMode } from "../../lib/layoutMode";
 import { useBrowser, type BrowserState } from "../browser/store";
 import { live } from "../live/store";
 import { ancestorIds } from "../groups/groups";
@@ -10,8 +11,12 @@ import { entryId, entryKey } from "./entryKey";
 import { pinSection } from "../browser/model";
 
 const GROUP_BORDER = SIDEBAR_GROUP.border;
-const ROW = SIDEBAR_ROW.height;
-const GAP = SIDEBAR_ROW.gap;
+let ROW = SIDEBAR_ROW.height;
+let GAP = SIDEBAR_ROW.gap;
+onLayoutMode(() => {
+  ROW = SIDEBAR_ROW.height;
+  GAP = SIDEBAR_ROW.gap;
+});
 
 export type Section = "pinnedGroups" | "list";
 

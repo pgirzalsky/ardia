@@ -20,6 +20,7 @@ import { registerRow, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { TabIcon } from "./TabIcon";
 import { TabBadges } from "../media/TabBadges";
 import { SIDEBAR_TYPE, TAB_ROW, useSidebarTokens } from "./tokens";
+import { isLoose } from "../../lib/layoutMode";
 import { useSidebarRowLook } from "./rowLook";
 import { ROW_TITLE_FRAME, SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
 import { withShortcut } from "../../state/commands/commandShortcuts";
@@ -80,8 +81,9 @@ export const TabRow = memo(function TabRow({
   const resettable = (isPinnedRow(tab) || !tab.pin) && awayFromPin(tab);
   const resetting = resettable && backToPin.hovered && !renaming;
   const title = resetting ? "Back to Pinned URL" : tabTitle(tab);
-  const fill = active ? tokens.tabSelectedFill : selected ? tokens.multiSelected : hovered ? theme.tabHover : ink.clear;
-  const border = selected && !active ? 0.5 : 0;
+  const loose = isLoose();
+  const fill = active ? (loose ? tokens.tabSelectedFill : theme.tabSelected) : selected ? tokens.multiSelected : hovered ? theme.tabHover : ink.clear;
+  const border = (loose ? selected && !active : active || selected) ? 0.5 : 0;
 
   return (
     <View
@@ -136,7 +138,7 @@ export const TabRow = memo(function TabRow({
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
             ) : (
-              <SidebarRowLabel text={title} color={theme.textTab} />
+              <SidebarRowLabel text={title} color={active && !loose ? theme.tabSelectedText : theme.textTab} />
             )}
             <HoverSlot
               hovered={hovered && !renaming}

@@ -43,6 +43,7 @@ export function AppearancePane() {
       <InterfaceStylePicker />
       <AddressBarPicker />
       <BookmarksBarSection />
+      <LayoutPicker />
       <SelectedTabGlowPicker />
       <ScrollBarsPicker />
       <AppIconPicker />
@@ -148,6 +149,28 @@ function AddressBarPicker() {
         </Row>
         </Group>
       </Box>
+    </>
+  );
+}
+
+function LayoutPicker() {
+  const layoutSetting = useSettings((s) => s.layout);
+  return (
+    <>
+      <SectionHeader title="Layout" />
+      <Group>
+        <Row anchor="appearance.layout">
+          <PopUp
+            value={layoutSetting}
+            options={[
+              { value: "default", title: "Default" },
+              { value: "loose", title: "Loose" },
+            ]}
+            onChange={(v) => updateSettings({ layout: v })}
+            minWidth={120}
+          />
+        </Row>
+      </Group>
     </>
   );
 }

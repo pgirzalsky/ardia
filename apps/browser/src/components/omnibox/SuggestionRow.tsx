@@ -1,14 +1,20 @@
 import { displayHost, displayUrl, hostOf, type Suggestion } from "@ardia/core";
 import { memo, type ReactNode } from "react";
+import { isLoose, onLayoutMode } from "../../lib/layoutMode";
 import { Image, Pressable, Text as NativeText, View } from "react-native";
 import { Button, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
 import { Favicon } from "../favicon/Favicon";
 import { SELECTED_SUGGESTION_ALPHA, SUGGESTION } from "./tokens";
 
-const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox } as const;
+const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox };
+onLayoutMode(() => {
+  ICON_BOX.width = SUGGESTION.iconBox;
+  ICON_BOX.height = SUGGESTION.iconBox;
+});
 
 function IconPlate({ children }: { children: ReactNode }) {
   const theme = useTheme();
+  if (!isLoose()) return <>{children}</>;
   return (
     <View style={{ ...ICON_BOX, borderRadius: SUGGESTION.plateRadius, alignItems: "center", justifyContent: "center", backgroundColor: theme.dark ? SUGGESTION.plateFill.dark : SUGGESTION.plateFill.light }}>
       {children}

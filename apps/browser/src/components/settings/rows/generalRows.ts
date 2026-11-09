@@ -330,6 +330,16 @@ export const generalRows = {
       },
     },
     {
+      section: "Layout",
+      rows: {
+        layout: {
+          title: "Layout",
+          description: "Default keeps Ardia's original spacing. Loose gives the sidebar, space switcher and command bar roomier rows.",
+          keywords: ["layout", "spacing", "density", "loose", "compact", "row height", "padding", "sidebar"],
+        },
+      },
+    },
+    {
       section: "Selected Tab",
       rows: {
         selectedTabGlow: {

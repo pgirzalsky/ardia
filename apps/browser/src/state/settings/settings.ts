@@ -105,6 +105,7 @@ export const SETTING_SPECS = {
   balancedTopApps: flag(false, SYNCED),
   showAdvancedSettings: flag(false),
   selectedTabGlow: oneOf(["full", "soft", "off"], "full", SYNCED),
+  layout: oneOf(["default", "loose"], "default", SYNCED),
   interfaceStyle: oneOf(["glass", "classic"], "glass", SYNCED),
   glassTintWithTheme: flag(false, SYNCED),
   glassTintAmount: fraction(0.8, SYNCED),

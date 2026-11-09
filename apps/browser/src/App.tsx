@@ -24,6 +24,7 @@ import { SidebarOverlays } from "./components/sidebar/Overlays";
 import { layout, profileAccent, profileTheme, useTheme } from "./components/ui/theme";
 import { ThemeScope } from "./components/window/ThemeScope";
 import { useBrowser } from "./state/browser/store";
+import { useLayoutEpoch } from "./lib/layoutMode";
 import { useWindowId, WindowContext } from "./state/browser/hooks";
 import { provideProfileLooks } from "./state/profiles/looks";
 import { currentBasePalette } from "./state/config/basePalette";
@@ -32,6 +33,11 @@ import { focusedWindowOf } from "./state/windows/ui";
 provideProfileLooks({ accent: profileAccent, theme: (profile, appDark, source) => profileTheme(profile, appDark, source, currentBasePalette()) });
 
 export function WindowRoot({ windowId }: { windowId?: string }) {
+  const epoch = useLayoutEpoch((s) => s.epoch);
+  return <WindowRootBody key={epoch} windowId={windowId} />;
+}
+
+function WindowRootBody({ windowId }: { windowId?: string }) {
   if (isUtilityWindowId(windowId))
     return (
       <ThemeScope>

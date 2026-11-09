@@ -5,6 +5,7 @@ import { backdropTint, opaqueTint, tintForHue, type BackdropTint } from "../../l
 import { isRgbFunction, mix, parseColor, rgbToHsl, toHex } from "../../lib/color";
 import { CARD_INSET, DEFAULT_SIDEBAR_WIDTH } from "../../lib/windowLayout";
 import { SIDEBAR_ROW } from "../../lib/sidebarMetrics";
+import { onLayoutMode } from "../../lib/layoutMode";
 import { colorRoles, ink, INCOGNITO_TINT, PROFILE_COLORS, radius, type ColorRoles, type ProfileColorSpec, type ShadowLevel } from "./tokens";
 import type { BasePalette } from "../../lib/themeFile";
 
@@ -180,6 +181,8 @@ export const layout = {
   breadcrumbX: 153,
   trafficLightsWidth: 78,
 } as const;
+
+onLayoutMode(() => Object.assign(layout, { rowHeight: SIDEBAR_ROW.height, rowGap: SIDEBAR_ROW.gap }));
 
 export type FormColors = {
   group: string;
