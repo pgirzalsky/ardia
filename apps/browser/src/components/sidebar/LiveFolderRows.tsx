@@ -13,6 +13,7 @@ import { RefreshSpinner } from "./RefreshSpinner";
 import { SectionLabel } from "./SectionLabel";
 import { SidebarListRow } from "./SidebarRow";
 import { TAB_ROW } from "./tokens";
+import { onLayoutMode } from "../../lib/layoutMode";
 
 const SECTION_HEIGHT = 22;
 
@@ -41,7 +42,7 @@ export function NoteRow({ text, icon, spinner, onPress }: { text: string; icon?:
 
 const NOTE_GAP = { gap: space.s } as const;
 const FILL = { flex: 1 } as const;
-const LABEL = { marginLeft: TAB_ROW.titleGap } as const;
+const LABEL = { marginLeft: TAB_ROW.titleGap };
 const SPINNER = { width: 16, height: 16, alignItems: "center", justifyContent: "center" } as const;
 
 function Spinner() {
@@ -70,7 +71,11 @@ export function MoreRow({ folderId, section, count }: { folderId: string; sectio
   );
 }
 
-const STACK_TITLE = { flex: 1, marginLeft: TAB_ROW.titleGap } as const;
+const STACK_TITLE = { flex: 1, marginLeft: TAB_ROW.titleGap };
+onLayoutMode(() => {
+  LABEL.marginLeft = TAB_ROW.titleGap;
+  STACK_TITLE.marginLeft = TAB_ROW.titleGap;
+});
 const STACK_COUNT = { marginRight: space.xs } as const;
 
 export function StackRow({ folderId, windowId, stack }: { folderId: string; windowId: string; stack: Extract<FolderRow, { kind: "stack" }> }) {

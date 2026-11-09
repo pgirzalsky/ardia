@@ -12,7 +12,7 @@ const SWITCHER_STANDARD = {
   band: 28,
   dotCell: 12,
   dot: 6,
-  iconCell: 18,
+  iconCell: 26,
   icon: 11,
   symbol: 11,
   symbolWeight: "semibold" as "semibold" | "medium",

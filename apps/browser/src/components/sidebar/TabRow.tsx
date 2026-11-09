@@ -9,7 +9,7 @@ import { muteTitle } from "../../state/tabs/mute";
 import { HoverSlot } from "../ui/HoverSlot";
 import { ActivitySpinner, Button, Divider, FadeLabel, font, ink, OutsidePressArea, radius, space, Symbol, useHover } from "../ui";
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
-import { awayFromPin } from "../../state/pins/organize";
+import { awayFromPin, awayTitle } from "../../state/pins/organize";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
 import { useDragItem, useDropOnto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
@@ -20,9 +20,10 @@ import { registerRow, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { TabIcon } from "./TabIcon";
 import { TabBadges } from "../media/TabBadges";
 import { SIDEBAR_TYPE, TAB_ROW, useSidebarTokens } from "./tokens";
-import { isLoose } from "../../lib/layoutMode";
+import { isLoose, onLayoutMode } from "../../lib/layoutMode";
 import { useSidebarRowLook } from "./rowLook";
 import { ROW_TITLE_FRAME, SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
+import { AwayTitleLabel } from "./AwayTitle";
 import { withShortcut } from "../../state/commands/commandShortcuts";
 import { TabPressArea } from "./TabPressArea";
 import { entryKey } from "../../state/sidebar/entryKey";
@@ -82,6 +83,7 @@ export const TabRow = memo(function TabRow({
   const resetting = resettable && backToPin.hovered && !renaming;
   const title = resetting ? "Back to Pinned URL" : tabTitle(tab);
   const loose = isLoose();
+  const away = resettable && !resetting ? awayTitle(tab) : null;
   const fill = active ? (loose ? tokens.tabSelectedFill : theme.tabSelected) : selected ? tokens.multiSelected : hovered ? theme.tabHover : ink.clear;
   const border = (loose ? selected && !active : active || selected) ? 0.5 : 0;
 
@@ -104,8 +106,8 @@ export const TabRow = memo(function TabRow({
             padLeft={TAB_ROW.contentLeft - border}
             padRight={TAB_ROW.trailing - border}
           >
-            {resettable ? (
-              <View {...backToPin.hoverProps}>
+            <View {...backToPin.hoverProps}>
+              {resettable ? (
                 <Pressable onPress={() => returnToPinnedUrl(tab.id)} tooltip={withShortcut("Back to Pinned URL", backToPinHint)}>
                   {resetting ? (
                     <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
@@ -118,13 +120,13 @@ export const TabRow = memo(function TabRow({
                     </View>
                   )}
                 </Pressable>
-              </View>
-            ) : (
-              <View>
-                <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} />
-                <TabBadges tabId={tab.id} />
-              </View>
-            )}
+              ) : (
+                <View>
+                  <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} />
+                  <TabBadges tabId={tab.id} />
+                </View>
+              )}
+            </View>
             {(playingAudio || mute) && (
               <Pressable onPress={() => toggleMute(tab.id)} style={{ marginLeft: space.s }} tooltip={muteTitle(mute)}>
                 <Symbol name={mute ? "speaker.slash" : "speaker.wave.2"} size={12} color={theme.textTab} style={{ width: 18, height: 16 }} />
@@ -137,6 +139,8 @@ export const TabRow = memo(function TabRow({
                 color={active ? theme.tabSelectedText : theme.textPrimary}
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
+            ) : away ? (
+              <AwayTitleLabel away={away} color={active ? theme.tabSelectedText : theme.textTab} fontSize={font.body.fontSize} height={TAB_ROW.titleHeight} style={AWAY_FRAME} />
             ) : (
               <SidebarRowLabel text={title} color={active && !loose ? theme.tabSelectedText : theme.textTab} />
             )}
@@ -152,6 +156,11 @@ export const TabRow = memo(function TabRow({
       </TabPressArea>
     </View>
   );
+});
+
+const AWAY_FRAME = { flex: 1, marginLeft: TAB_ROW.titleGap };
+onLayoutMode(() => {
+  AWAY_FRAME.marginLeft = TAB_ROW.titleGap;
 });
 
 export function RenameField({

@@ -8,9 +8,13 @@ import { closeAllTabs } from "../../state/sidebar/clearTabs";
 import { tidyPins } from "../../state/sidebar/tidyPinsUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { PINNED_FOLD_TITLES, togglePinnedFold } from "../../state/sidebar/pinnedFold";
+import { onLayoutMode } from "../../lib/layoutMode";
 
 const CLEAR_DIVIDER_HEIGHT = 16;
-const PADDING = TAB_ROW.contentLeft;
+let PADDING = TAB_ROW.contentLeft;
+onLayoutMode(() => {
+  PADDING = TAB_ROW.contentLeft;
+});
 const ACTIONS_DIVIDER = { marginLeft: space.m } as const;
 const SPACED_TOP = 7;
 
