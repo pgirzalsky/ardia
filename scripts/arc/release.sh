@@ -80,6 +80,10 @@ pb "Set :SUPublicEDKey $PUBLIC_KEY"
 pb "Set :CFBundleIdentifier $BUNDLE_ID"
 pb "Set :CFBundleVersion $build"
 pb "Add :CFBundleDisplayName string $APP_NAME" 2>/dev/null || pb "Set :CFBundleDisplayName $APP_NAME"
+# the fork's own icon (Assets.car's AppIcon would win over the .icns, so drop CFBundleIconName)
+cp "$TREE/scripts/arc/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
+pb "Delete :CFBundleIconName" 2>/dev/null || true
+pb "Set :CFBundleIconFile AppIcon"
 codesign --force --deep --sign - "$app"
 codesign --verify --deep --strict "$app"
 
