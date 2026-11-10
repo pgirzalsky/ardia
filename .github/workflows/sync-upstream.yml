@@ -1,0 +1,85 @@
+# Fork-only: follows new releases of the original repo.
+#   main               -> fast-forwarded to the release (merged if main carries this file and can't fast-forward)
+#   arc-style-spacing  -> the release is merged in; on conflict a PR is opened instead
+# Optional secret SYNC_TOKEN (a PAT with repo + workflow scopes) is needed when a release
+# changes files under .github/workflows; the default token is not allowed to push those.
+name: Sync upstream release
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+
+env:
+  UPSTREAM: mantrakp04/ardia
+  FORK_BRANCH: arc-style-spacing
+  TAG_PATTERN: '^v[0-9]' # releases like v0.2.46-nightly.2; skips engine-*
+
+jobs:
+  sync:
+    if: github.repository != 'mantrakp04/ardia'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Sync
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "https://github.com/$UPSTREAM.git"
+
+          tag=$(gh api "repos/$UPSTREAM/releases?per_page=30" \
+            --jq '[.[] | select(.draft | not) | select(.tag_name | test(env.TAG_PATTERN))][0].tag_name')
+          [ -n "$tag" ] || { echo "No matching upstream release"; exit 0; }
+          git fetch --no-tags upstream "refs/tags/$tag:refs/tags/upstream-$tag"
+          sha=$(git rev-list -n1 "upstream-$tag")
+          echo "Latest upstream release: $tag ($sha)"
+
+          git fetch origin main "$FORK_BRANCH"
+
+          # main
+          if git merge-base --is-ancestor "$sha" origin/main; then
+            echo "main already has $tag"
+          elif git merge-base --is-ancestor origin/main "$sha"; then
+            git push origin "$sha:refs/heads/main"
+            echo "main fast-forwarded to $tag"
+          else
+            git checkout -q -B sync-main origin/main
+            git merge --no-edit -m "Merge upstream $tag into main" "$sha" \
+              || { git merge --abort; echo "::error::main cannot take $tag cleanly"; exit 1; }
+            git push origin sync-main:refs/heads/main
+            echo "main merged with $tag"
+          fi
+
+          # fork branch
+          if git merge-base --is-ancestor "$sha" "origin/$FORK_BRANCH"; then
+            echo "$FORK_BRANCH already has $tag"; exit 0
+          fi
+          if git ls-remote --exit-code --heads origin "upstream-sync/$tag" >/dev/null; then
+            echo "upstream-sync/$tag already opened, waiting for you"; exit 0
+          fi
+          git checkout -q -B sync-fork "origin/$FORK_BRANCH"
+          if git merge --no-edit -m "Merge upstream $tag into $FORK_BRANCH" "$sha"; then
+            git push origin "sync-fork:refs/heads/$FORK_BRANCH"
+            echo "$FORK_BRANCH merged with $tag"
+          else
+            git merge --abort
+            git push origin "$sha:refs/heads/upstream-sync/$tag"
+            gh pr create --base "$FORK_BRANCH" --head "upstream-sync/$tag" \
+              --title "Merge upstream $tag" \
+              --body "Upstream release $tag conflicts with $FORK_BRANCH. Resolve the conflicts on this PR (web editor or locally), then merge."
+            echo "Conflict: opened a PR for $tag"
+          fi
