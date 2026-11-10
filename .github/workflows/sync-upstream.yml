@@ -1,9 +1,9 @@
-# Fork-only: follows the main branch of the original repo.
-#   main               -> fast-forwarded to upstream main (merged if main carries this file and can't fast-forward)
-#   arc-style-spacing  -> upstream main is merged in; on conflict a PR is opened instead
+# Fork-only: follows the release marked "Latest" on the original repo (not pre-releases or nightlies).
+#   main               -> fast-forwarded to that release (merged if main carries this file and can't fast-forward)
+#   arc-style-spacing  -> the release is merged in; on conflict a PR is opened instead
 # Optional secret SYNC_TOKEN (a PAT with repo + workflow scopes) is needed when upstream
 # changes files under .github/workflows; the default token is not allowed to push those.
-name: Sync upstream main
+name: Sync upstream latest release
 
 on:
   schedule:
@@ -39,33 +39,34 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream "https://github.com/$UPSTREAM.git"
-          git fetch --no-tags upstream main
-          sha=$(git rev-parse upstream/main)
-          short=${sha:0:8}
-          echo "Upstream main: $sha"
+          tag=$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)
+          git fetch --no-tags upstream "refs/tags/$tag:refs/tags/upstream-$tag"
+          sha=$(git rev-list -n1 "upstream-$tag")
+          short=$tag
+          echo "Latest upstream release: $tag ($sha)"
 
           git fetch origin main "$FORK_BRANCH"
 
           # main
           if git merge-base --is-ancestor "$sha" origin/main; then
-            echo "main already has upstream main"
+            echo "main already has $short"
           elif git merge-base --is-ancestor origin/main "$sha"; then
             git push origin "$sha:refs/heads/main"
             echo "main fast-forwarded to $short"
           else
             git checkout -q -B sync-main origin/main
-            git merge --no-edit -m "Merge upstream main ($short) into main" "$sha" \
-              || { git merge --abort; echo "::error::main cannot take upstream main cleanly"; exit 1; }
+            git merge --no-edit -m "Merge upstream $short into main" "$sha" \
+              || { git merge --abort; echo "::error::main cannot take $short cleanly"; exit 1; }
             git push origin sync-main:refs/heads/main
             echo "main merged with $short"
           fi
 
           # fork branch
           if git merge-base --is-ancestor "$sha" "origin/$FORK_BRANCH"; then
-            echo "$FORK_BRANCH already has upstream main"; exit 0
+            echo "$FORK_BRANCH already has $short"; exit 0
           fi
           git checkout -q -B sync-fork "origin/$FORK_BRANCH"
-          if git merge --no-edit -m "Merge upstream/main ($short) into $FORK_BRANCH" "$sha"; then
+          if git merge --no-edit -m "Merge upstream $short into $FORK_BRANCH" "$sha"; then
             git push origin "sync-fork:refs/heads/$FORK_BRANCH"
             echo "$FORK_BRANCH merged with $short"
             exit 0
@@ -76,12 +77,12 @@ jobs:
           pr=$(gh pr list --head upstream-sync --base "$FORK_BRANCH" --state open --json number --jq '.[0].number // empty')
           remote=$(git ls-remote origin refs/heads/upstream-sync | cut -f1)
           if [ -z "$pr" ] && [ "$remote" = "$sha" ]; then
-            echo "PR for $short was closed, waiting for a newer upstream commit"; exit 0
+            echo "PR for $short was closed, waiting for a newer release"; exit 0
           fi
           git push --force origin "$sha:refs/heads/upstream-sync"
           if [ -z "$pr" ]; then
             gh pr create --base "$FORK_BRANCH" --head upstream-sync \
-              --title "Merge upstream main" \
-              --body "Upstream main conflicts with $FORK_BRANCH. Resolve the conflicts on this PR (web editor or locally), then merge. It follows newer upstream commits until it is merged."
+              --title "Merge upstream $short" \
+              --body "Upstream release $short conflicts with $FORK_BRANCH. Resolve the conflicts on this PR (web editor or locally), then merge. It moves to newer releases until it is merged."
           fi
           echo "Conflict: PR is open for $short"
