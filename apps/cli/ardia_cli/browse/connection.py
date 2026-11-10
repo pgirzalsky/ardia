@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from ardia_cli import guard
+from ardia_cli import command_metrics, guard
 from ardia_cli.browse.errors import POLICY_REFUSAL, CdpError, CdpTimeout, ConnectionLost, Gated, OutcomeUnknown, Unreachable
 
 MAX_MESSAGE = 256 * 1024 * 1024
@@ -23,6 +23,7 @@ EVENTS = (
     "Page.javascriptDialogClosed",
     "Page.frameDetached",
     "Page.screencastFrame",
+    "Input.dragIntercepted",
     "Runtime.consoleAPICalled",
     "Runtime.exceptionThrown",
     "Runtime.executionContextsCleared",
@@ -62,7 +63,6 @@ def link_class():
             super().__init__(ws_address=ws, ws_connector=guard.direct_connect)
             self.used = False
             self.lost = asyncio.Event()
-            self.closing = False
 
         async def _establish_new_connection(self):
             if self.used:
@@ -127,6 +127,7 @@ class Browser:
         command = {"method": method, "params": params or {}}
         if session:
             command["sessionId"] = session
+        started = command_metrics.clock()
         try:
             response = await self.link.execute_command(command, timeout=timeout)
         except CommandFailed as error:
@@ -142,25 +143,12 @@ class Browser:
             raise CdpTimeout(method, timeout) from None
         except WebSocketConnectionClosed:
             raise ConnectionLost() from None
+        command_metrics.cdp_call(started)
         return response.get("result") or {}
-
-    async def send_nowait(self, method: str, params: dict | None = None, session: str | None = None):
-        from pydoll.exceptions import WebSocketConnectionClosed
-
-        if not self.alive:
-            raise ConnectionLost()
-        command = {"method": method, "params": params or {}}
-        if session:
-            command["sessionId"] = session
-        try:
-            await self.link.execute_command_nowait(command)
-        except WebSocketConnectionClosed:
-            raise ConnectionLost() from None
 
     async def close(self):
         self.closed_by_us = True
         if self.link is not None:
-            self.link.closing = True
             try:
                 await asyncio.wait_for(self.link.close(), 3)
             except Exception:

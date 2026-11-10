@@ -91,6 +91,7 @@ ARDIACORE_EXPORT
                      origin:(nullable NSString*)origin
                       audio:(nullable NSString*)audio;
 @property(class, readonly) NSDictionary<NSString*, NSNumber*>* desktopCaptureAudio;
+@property(class) BOOL pagesPickDisplayMedia;
 - (void)offTheRecordProfileFor:(ArdiaCoreProfile*)profile
                     completion:(void (^)(ArdiaCoreProfile* _Nullable offTheRecord,
                                          NSString* _Nullable error))completion;
@@ -131,6 +132,12 @@ ARDIACORE_EXPORT
        completion:(void (^)(NSData* _Nullable body))completion;
 @end
 
+typedef NS_ENUM(NSInteger, ArdiaCoreAdoption) {
+  ArdiaCoreAdoptionRefused,
+  ArdiaCoreAdoptionAdopted,
+  ArdiaCoreAdoptionBusy,
+};
+
 @protocol ArdiaCoreWindowDelegate <NSObject>
 @optional
 - (void)window:(ArdiaCoreWindow*)window
@@ -151,13 +158,10 @@ ARDIACORE_EXPORT
 - (void)window:(ArdiaCoreWindow*)window
     autofillPrompt:(NSDictionary<NSString*, id>*)prompt
             forTab:(ArdiaCoreTab*)tab;
-- (void)window:(ArdiaCoreWindow*)window
-    passwordSavePromptForTab:(ArdiaCoreTab*)tab
-                    username:(NSString*)username
-                      origin:(NSString*)origin;
 - (void)window:(ArdiaCoreWindow*)window showRequestedActive:(BOOL)active;
 - (BOOL)windowShouldClose:(ArdiaCoreWindow*)window;
 - (void)windowDidCancelClose:(ArdiaCoreWindow*)window;
+- (void)windowCanTakeTabs:(ArdiaCoreWindow*)window;
 - (void)window:(ArdiaCoreWindow*)window
     confirmCloseWithDownloads:(int)count
                    completion:(void (^)(BOOL closeAnyway))completion;
@@ -191,7 +195,8 @@ ARDIACORE_EXPORT
 - (void)close;
 
 - (void)prepareProfile:(ArdiaCoreProfile*)profile;
-- (void)adoptTab:(ArdiaCoreTab*)tab;
+- (ArdiaCoreAdoption)adoptTab:(ArdiaCoreTab*)tab;
+- (ArdiaCoreAdoption)canAdoptTab:(ArdiaCoreTab*)tab;
 - (nullable ArdiaCoreTab*)restoreTab:(nullable NSString*)state
                           profile:(ArdiaCoreProfile*)profile
                        foreground:(BOOL)foreground;
@@ -358,7 +363,6 @@ ARDIACORE_EXPORT
 - (void)exitPictureInPicture;
 - (void)enterPictureInPictureForClickAt:(NSTimeInterval)clickTime
                              completion:(void (^)(NSString* route, BOOL opened))completion;
-- (BOOL)canShareThisTabInsteadFor:(ArdiaCoreTab*)capturer;
 - (BOOL)shareThisTabInsteadFor:(ArdiaCoreTab*)capturer;
 - (BOOL)showCastDialog;
 - (BOOL)devShowBluetoothChooser:(BOOL)unauthorized;

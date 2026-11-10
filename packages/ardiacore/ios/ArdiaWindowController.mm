@@ -56,6 +56,7 @@ void HandOffTab(ArdiaCoreTab *tab) {
   BOOL _showInactive;
   BOOL _announced;
   __weak ArdiaCoreTab *_chromeActive;
+  id _willCloseObserver;
 }
 
 + (BOOL)userSees:(NSWindow *)window {
@@ -217,14 +218,18 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
     _coreWindow = coreWindow;
     coreWindow.delegate = self;
     __weak ArdiaWindowController *weakSelf = self;
-    [NSNotificationCenter.defaultCenter addObserverForName:NSWindowWillCloseNotification
-                                                    object:coreWindow.window
-                                                     queue:nil
-                                                usingBlock:^(NSNotification *) {
-                                                  if (ArdiaWindowController *c = weakSelf) [ArdiaTabStrip windowClosed:c];
-                                                }];
+    _willCloseObserver = [NSNotificationCenter.defaultCenter addObserverForName:NSWindowWillCloseNotification
+                                                                         object:coreWindow.window
+                                                                          queue:nil
+                                                                     usingBlock:^(NSNotification *) {
+                                                                       if (ArdiaWindowController *c = weakSelf) [ArdiaTabStrip windowClosed:c];
+                                                                     }];
   }
   return self;
+}
+
+- (void)dealloc {
+  if (_willCloseObserver) [NSNotificationCenter.defaultCenter removeObserver:_willCloseObserver];
 }
 
 - (ArdiaWebView *)viewFor:(ArdiaCoreTab *)tab {
@@ -340,6 +345,11 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 
 - (void)windowDidCancelClose:(ArdiaCoreWindow *)window {
   NSLog(@"[ardiacore] window close cancelled");
+  [ArdiaWebView retryPagesInWindow:self];
+}
+
+- (void)windowCanTakeTabs:(ArdiaCoreWindow *)window {
+  [ArdiaWebView retryPagesInWindow:self];
 }
 
 - (void)window:(ArdiaCoreWindow *)window confirmCloseWithDownloads:(int)count completion:(void (^)(BOOL))completion {

@@ -64,7 +64,7 @@ export function ContentCard() {
   const geometryFor = (rect: Rect | undefined): ToolbarGeometry => {
     if (chrome.kind === "none") return NO_TOOLBAR;
     const leading = !!rect && rect.x === 0 && rect.y === 0;
-    return toolbarGeometry({ sidebarButton: leading && tabLayout === "sidebar" && showSidebarButton });
+    return toolbarGeometry({ sidebarButton: leading && showSidebarButton });
   };
 
   const focusedRect = activeId ? panes[activeId] : undefined;
@@ -154,6 +154,7 @@ export function ContentCard() {
       {size.width > 0 && popoversOverCard && origin && activeRect && peek !== undefined && (
         <BesidePeekPopovers
           tabId={popoversOverCard}
+          windowId={windowId}
           left={peek[0] === -Infinity ? Math.max(activeRect.x, peek[1] - origin.x) + POPOVER_MARGIN : Infinity}
           top={activeRect.y + POPOVER_MARGIN}
           room={peek[0] === -Infinity ? size.width : Math.min(size.width, peek[0] - origin.x)}
@@ -167,7 +168,7 @@ export function ContentCard() {
           height={size.height}
           origin={origin}
           fullscreen={peekFullscreen}
-          page={(tabId, sourceId, width) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} fullscreen={peekFullscreen} />}
+          page={(tabId, sourceId, width) => <PeekPage tabId={tabId} sourceId={sourceId} windowId={windowId} width={width} />}
         />
       )}
       <SplitToast windowId={windowId} />

@@ -112,18 +112,28 @@ const setLive = (patch: Partial<LiveState> | ((s: LiveState) => Partial<LiveStat
 
 export const showAllKey = (folderId: string, section: string) => `${folderId}:${section}`;
 
+const SAVE_DELAY_MS = 800;
 let timer: ReturnType<typeof setTimeout> | undefined;
+
+function save() {
+  clearTimeout(timer);
+  timer = undefined;
+  const s = live();
+  try {
+    writeDocument(DOC, versionedJson(Object.fromEntries(PERSISTED.map((k) => [k, s[k]])), DOC_VERSION));
+  } catch (error) {
+    console.warn("Couldn't save live folders", error);
+  }
+}
+
+export function flushLive() {
+  if (timer !== undefined) save();
+}
+
 useLive.subscribe((s, prev) => {
   if (PERSISTED.every((k) => s[k] === prev[k])) return;
   clearTimeout(timer);
-  timer = setTimeout(() => {
-    const s = live();
-    try {
-      writeDocument(DOC, versionedJson(Object.fromEntries(PERSISTED.map((k) => [k, s[k]])), DOC_VERSION));
-    } catch (error) {
-      console.warn("Couldn't save live folders", error);
-    }
-  }, 800);
+  timer = setTimeout(save, SAVE_DELAY_MS);
 });
 
 let counter = 0;
@@ -226,7 +236,9 @@ export function applyFetch(folderId: string, fetched: LiveItem[], gone: Record<s
   setLive((s) => {
     if (!s.folders[folderId]) return {};
     const closed = (id: string) => gone[id] === "merged" || gone[id] === "closed";
-    const stillHidden = (s.hidden[folderId] ?? []).filter((it) => !closed(it.id));
+    const fetchedById = new Map(fetched.map((it) => [it.id, it]));
+    const wasHidden = s.hidden[folderId] ?? [];
+    const stillHidden = wasHidden.filter((it) => !closed(it.id)).map((it) => fetchedById.get(it.id) ?? it);
     const hiddenIds = new Set(stillHidden.map((it) => it.id));
     const next = fetched.filter((it) => !hiddenIds.has(it.id));
     const known = new Set(s.known[folderId] ?? []);
@@ -247,7 +259,7 @@ export function applyFetch(folderId: string, fetched: LiveItem[], gone: Record<s
     const stillThere = new Set(merged.map((it) => it.id));
     return {
       items: { ...s.items, [folderId]: merged },
-      hidden: stillHidden.length === (s.hidden[folderId] ?? []).length ? s.hidden : { ...s.hidden, [folderId]: stillHidden },
+      hidden: stillHidden.length === wasHidden.length && stillHidden.every((it, i) => it === wasHidden[i]) ? s.hidden : { ...s.hidden, [folderId]: stillHidden },
       known: { ...s.known, [folderId]: [...known, ...fresh].slice(-MAX_KNOWN) },
       unread: { ...s.unread, [folderId]: first ? [] : [...new Set([...(s.unread[folderId] ?? []), ...unreadFresh])].filter((id) => stillThere.has(id)) },
       completed: leaving.length || (s.completed[folderId] ?? []).length !== completed.length ? { ...s.completed, [folderId]: completed } : s.completed,
