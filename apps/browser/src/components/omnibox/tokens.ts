@@ -112,8 +112,6 @@ onLayoutMode((m) => Object.assign(SUGGESTION, pick(SUGGESTION_STANDARD, SUGGESTI
 
 export const SELECTED_SUGGESTION_ALPHA = { dark: 0.56, light: 0.3 } as const;
 
-export const SUGGESTION_TEXT_SIZE = font.title.fontSize;
-
 export const GROW = { duration: 130, easing: curve.outExpo } as const;
 
 export const SCOPE_PULSE = {
