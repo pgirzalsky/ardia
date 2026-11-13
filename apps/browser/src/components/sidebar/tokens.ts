@@ -89,6 +89,7 @@ export const TAB_ROW = { contentLeft: 9, trailing: 6, titleGap: 5, titleHeight: 
 onLayoutMode((m) => Object.assign(TAB_ROW, pick({ contentLeft: 9, titleGap: 5 }, { contentLeft: 10, titleGap: 11 }, m)));
 
 export const TILE_RIM = 1;
+export const TILE_STATUS = { pip: 8, speaker: 9.5, box: { width: 14, height: 12 }, inset: { x: 5, y: 4 } } as const;
 
 export const AWAY_TITLE = { slashAlpha: 0.45, slashGap: 4, pinnedMaxWidth: "45%" } as const;
 

@@ -815,6 +815,39 @@ class RenderTest(unittest.TestCase):
         self.assertIn("isn't allowed for the ardia command", error.message)
         self.assertEqual(error.code, "policy_refused")
 
+    def test_a_conditional_refusal_keeps_the_engines_reason(self):
+        from ardia_cli.browse.errors import refusal_reason
+
+        said = "Command failed: ardia: Target.attachToTarget to that target isn't allowed for the ardia command (code -32000)"
+        self.assertEqual(refusal_reason(said, "Target.attachToTarget"), "to that target")
+        self.assertEqual(refusal_reason("ardia: Network.getCookies isn't allowed for the ardia command", "Network.getCookies"), "")
+        self.assertEqual(refusal_reason("ardia: Target.getTargetInfo on that target isn't allowed for the ardia command", "Target.getTargetInfo"),
+                         "on that target")
+        error = Gated("Target.attachToTarget", reason="to that target")
+        self.assertIn("which Ardia allows for the ardia command, but not to that target", error.message)
+        self.assertIn("(Target.attachToTarget to that target isn't allowed for the ardia command)", error.message)
+        self.assertNotIn("once the engine's token policy allows it", error.message)
+        self.assertEqual((error.code, error.data), ("policy_refused", {"method": "Target.attachToTarget", "reason": "to that target"}))
+        named = error.during("open", "Ardia has it open as tab-1 at chrome://settings/")
+        self.assertTrue(named.message.startswith("`open` needs Target.attachToTarget, which Ardia allows"))
+        self.assertTrue(named.message.endswith("(Ardia has it open as tab-1 at chrome://settings/)"))
+        self.assertEqual(named.reason, "to that target")
+        self.assertEqual(Gated("Fetch.enable").data, {"method": "Fetch.enable", "reason": ""})
+
+    def test_a_viewport_refused_on_a_tab_the_command_didnt_open_says_where_it_works(self):
+        from ardia_cli.browse.errors import refusal_reason
+
+        method = "Emulation.setDeviceMetricsOverride"
+        said = f"ardia: {method} on a tab the ardia command didn't open isn't allowed for the ardia command"
+        reason = refusal_reason(said, method)
+        self.assertEqual(reason, "on a tab the ardia command didn't open")
+        error = Gated(method, reason=reason).during("set viewport")
+        self.assertTrue(error.message.startswith("`set viewport` needs Emulation.setDeviceMetricsOverride, which Ardia allows"))
+        self.assertIn("only on a tab this command opened: `ardia browse open <url>`", error.message)
+        taken = Gated(method, reason="on a tab the user can see").during("set viewport")
+        self.assertIn("the viewport is for tabs nobody is looking at", taken.message)
+        self.assertNotIn("once the engine's token policy allows it", error.message)
+
     def test_every_documented_command_is_registered_or_skipped(self):
         daemon.load_commands()
         for name in ("open", "snapshot", "click", "dblclick", "type", "fill", "press", "keyboard", "hover", "focus", "check", "uncheck",

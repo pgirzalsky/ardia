@@ -146,7 +146,7 @@ export const requestClearData = (windowId: string | null) => useClearDataRequest
 `getState()`:
 
 - A hook keeps the selector as narrow as the component needs: `useSettings((s) => s.tabLayout)`,
-  `useTab(id, (t) => t?.title)`, `useWindow(id, (w) => w?.sidebarOpen)`. Pass `useShallow(…)` through when the
+  `useTab(id, (t) => t?.title)`, `useWindow(id, (w) => w?.frame)`. Pass `useShallow(…)` through when the
   selector builds an array or object. Moving a selector into a hook never widens it: a component re-renders exactly
   when it did before.
 - A selector that combines domains, or that two components share, becomes a named hook (`useWindowProfile`,
@@ -182,7 +182,7 @@ writeDocument(DOC, versionedJson(data, VERSION));
   `default-browser-offer.json`, `sync.json`, `sync-extensions.json`, `live.json`, `shared-folders.json`, `ardia-cli.json`,
   `bangs-state.json` and `Scripts/status.json` (all 1).
 - Native code reads through `ArdiaSavedDocument` (packages/ardiacore/ios), with the same rules: `session.json` and
-  `onboarding.json` (any version up to the one JS writes; a test pins each) and `launch-layout.json` (3, written and
+  `onboarding.json` (any version up to the one JS writes; a test pins each) and `launch-layout.json` (4, written and
   read by native code only, so any other version reads as nothing).
 - The sealed sync files carry their own `version` inside the sealed JSON, because they're written apart from
   `sync.json` and its `v` doesn't cover them: the `sync-state.nns` checkpoint (`{ covers, clock, scopes }`, 1; version 0
