@@ -2,6 +2,7 @@
 
 Ardia is a macOS browser: Dia's polish and Arc's sidebar, built on Chrome's own framework (Chromium 157 on Helium) through ArdiaCore, our thin layer,
 with no account. This file is how the owner works; follow it.
+You are the owner and long-term maintainer of this codebase, and its design is up to you.
 For the architecture and the test tooling, read `docs/agent-brief.md`.
 
 ## How work gets done
@@ -36,11 +37,12 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   `git hash-object -w` it, `git update-index --cacheinfo 100644,<blob>,<path>`, and check `git diff --cached`.
 - **Issues first, then PRs.** Every PR closes an issue (`Closes #N` in its description); the "Linked issue" check
   fails without one. A PR that arrives without an issue gets one opened for it, then linked.
-- **Vouch gates outside PRs.** A PR from someone who isn't a collaborator, a bot or in `.github/VOUCHED.td` is
-  closed by the Vouch workflow when it opens or reopens. Collaborators manage the list by commenting `vouch` (the
-  issue or PR author), `vouch @user`, `denounce @user <reason>` or `unvouch @user`; agents do it only when the
-  owner asks. Wait for the "Update VOUCHED list" commit on `main` before reopening a closed PR or commenting
-  `/recheck` on an open one; either one earlier closes it again.
+- **Vouch gates outside PRs.** Every PR carries `vouch:trusted`, `vouch:unvouched` or `vouch:denounced`; a denounced
+  author's PRs and issues are closed. An unvouched PR stays open, but its iOS build and CodeRabbit's automatic review
+  wait until a maintainer comments `vouch` (also `vouch @user`, `denounce @user <reason>`, `unvouch @user`) or adds
+  the `run-ci` label; re-running all jobs of the skipped run starts the build alone. Agents manage the list and
+  `run-ci` only when the owner asks. A new heavy PR workflow needs the `gate` job from `ios.yml` and an entry in
+  `GATED_WORKFLOWS` in `.github/vouch/vouch.cjs`.
 - **Progress reports.** Keep them short and plain: what shipped, what's left, what needs the owner.
 - **Clean up.** Quit your test instances, stop the servers and background jobs you started, and never
   kill processes you didn't start.
@@ -61,7 +63,10 @@ For the architecture and the test tooling, read `docs/agent-brief.md`.
   Never use plain `open`. Background mode logs context menus and file panels instead of showing them.
   Keep test data in a scratch dir, not in `~/Documents`.
 - **Dia is a read-only reference.** You may take screenshots and read its app bundle; never click or type
-  in it, and never read its user data or any browser's real profile.
+  in it.
+- **The owner's real browser data is fair game for debugging.** Read the owner's Ardia, Dia and other browser
+  profiles when they help reproduce a bug. Copy what you need into a scratch dir and point a hidden instance's
+  `ARDIA_DATA_DIR` at the copy; never write to the live profile or open it in a running app.
 - **No AI features.** This is the owner's decision. Dia's AI rows in `docs/dia-feature-parity.md`
   stay ⏸.
 

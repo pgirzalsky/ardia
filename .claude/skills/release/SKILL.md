@@ -200,6 +200,8 @@ and a session whose window was left on its second profile, and checks, over CDP 
 
 - the engine and chrome://version are the Chromium version `engine/patches/build/env.sh` names, and the after-update release-notes tab opened exactly once;
 - the browser's child processes are the bundle's own helpers (Chrome's process checks pass under Developer ID);
+- `ardia browse read <url>`, `open <url>` and `read` work over the real token connection, with the release's own CLI
+  tarball (`apps/cli/scripts/token-smoke.sh`, in a second hidden instance with no DevTools port);
 - pages load, uBlock blocks an ad script, H.264/AAC/WebGL2;
 - no hidden full-size Chrome window (since 0.2.0 the app window is Chrome's own; before, a hidden "ghost"
   sat behind it), and the window restores as the Work profile's Chrome window, alone on screen, its pages
@@ -378,14 +380,14 @@ A release without `--phased` goes to everyone at once, as before.
 
 ### 5c. Homebrew tap
 
-https://github.com/mantrakp04/homebrew-tap holds `Casks/ardia.rb` (stable) and `Casks/ardia@nightly.rb`, so
-`brew install mantrakp04/tap/ardia` installs the latest DMG. `update-tap.sh <version>` clones the tap into a temp dir,
+https://github.com/ardia-browser/homebrew-tap holds `Casks/ardia.rb` (stable) and `Casks/ardia@nightly.rb`, so
+`brew install ardia-browser/tap/ardia` installs the latest DMG. `update-tap.sh <version>` clones the tap into a temp dir,
 sets the matching cask's `version` and `sha256` (GitHub's digest of the published DMG, checked against
 `dist/<version>/`), and pushes; `--dry-run` prints the diff instead. It refuses a version older than the cask's and
 does nothing when the cask is already there. `publish.sh` runs it for both channels (in CI only with the
 `HOMEBREW_TAP_TOKEN` secret; otherwise run it yourself after the workflow). The casks have `auto_updates true`: Sparkle updates installed copies and `brew upgrade`
 skips them, so a late tap push only delays new installs. Lint after a cask edit by hand (never `brew install` it: that
-writes `/Applications/Ardia.app`): `brew audit --cask --online mantrakp04/tap/ardia` and `brew style mantrakp04/tap`.
+writes `/Applications/Ardia.app`): `brew audit --cask --online ardia-browser/tap/ardia` and `brew style ardia-browser/tap`.
 
 ## 6. Deploy the site
 
