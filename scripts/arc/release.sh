@@ -22,6 +22,7 @@ BUNDLE_ID=com.pgirzalsky.ardia.arc
 APP_NAME="Ardia Arc"
 FEED="https://github.com/$FORK/releases/latest/download/appcast.xml"
 SPARKLE_ACCOUNT=ardia-arc
+SIGN_IDENTITY="Apple Development: philipp@pgirzalsky.com (K7B6Z9RDQH)"
 PUBLIC_KEY=pwnwmkKBU2ycLqRZE41NGuAfDdhYGjvJcMImQuW7etI=
 SOURCE="${ARC_SOURCE:-$HOME/Developer/ardia}"
 TREE="${ARC_TREE:-$HOME/Developer/ardia-arc-build}"
@@ -84,7 +85,7 @@ pb "Add :CFBundleDisplayName string $APP_NAME" 2>/dev/null || pb "Set :CFBundleD
 cp "$TREE/scripts/arc/AppIcon.icns" "$app/Contents/Resources/AppIcon.icns"
 pb "Delete :CFBundleIconName" 2>/dev/null || true
 pb "Set :CFBundleIconFile AppIcon"
-codesign --force --deep --sign - "$app"
+codesign --force --deep --sign "$SIGN_IDENTITY" "$app"
 codesign --verify --deep --strict "$app"
 
 zip="$out/Ardia-Arc-$build.zip"
