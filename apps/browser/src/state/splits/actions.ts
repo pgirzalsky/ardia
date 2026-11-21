@@ -5,8 +5,10 @@ import { menuShortcut } from "../commands/commandShortcuts";
 import { storeAction, useBrowser } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isStacked, MAX_SPLIT_PANES, type OpenPaneOptions, splitOf, type SplitSide, splitTabIds, splitTabIdsOf } from "./splits";
+import { splitLane, type SplitLane, splitsOnRow } from "./lanes";
 import type { AdoptId } from "../browser/types";
 import { noteSplit } from "../telemetry/usage";
+import { returnFocusToPage } from "../sidebar/actions";
 
 const store = () => useBrowser.getState();
 
@@ -15,11 +17,24 @@ const maxedOut = (windowId: string) =>
 
 export function openSplitPane(windowId: string, options: OpenPaneOptions = {}): string | null {
   const result = store().openSplitPane(windowId, options);
+  if (!result.ok && result.reason === "unavailable") return options.url ? openAsTab(windowId, options) : null;
   if (!result.ok) {
     if (result.reason === "max") maxedOut(windowId);
     return null;
   }
   return result.tabId;
+}
+
+export function focusSplitPane(windowId: string, delta: 1 | -1) {
+  const before = activeTabId(store(), windowId);
+  store().focusPane(windowId, delta);
+  if (activeTabId(store(), windowId) !== before) returnFocusToPage(windowId);
+}
+
+function openAsTab(windowId: string, { url, adoptId, anchorTabId, background }: OpenPaneOptions): string | null {
+  const anchor = anchorTabId ? store().tabs[anchorTabId] : undefined;
+  if (!store().windows[windowId]) return null;
+  return store().newTab(windowId, { url, adoptId, background, openerId: anchor?.id, profileId: anchor?.profileId, gated: true });
 }
 
 export const openNewTabInSplit = (windowId: string) => openSplitPane(windowId);
@@ -44,10 +59,28 @@ export function openLinkInSplit(sourceTabId: string, url: string, adoptId?: Adop
   openSplitPane(source.windowId, { anchorTabId: sourceTabId, url, side: "right", background: true, adoptId, inPlaceOf });
 }
 
-export function dropTabIntoSplit(tabId: string, targetTabId: string, side: SplitSide) {
+export function dropTabIntoSplit(tabId: string, targetTabId: string, side: SplitSide): string | null {
   const target = store().tabs[targetTabId];
-  if (!target || tabId === targetTabId) return;
-  openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side });
+  if (!target || tabId === targetTabId) return null;
+  return openSplitPane(target.windowId, { tabId, anchorTabId: targetTabId, side });
+}
+
+export type RowSplitDrop = { adopted: SplitLane | null };
+
+export function dropTabOnRow(tabId: string, rowTabId: string, side: "left" | "right"): RowSplitDrop | null {
+  const s = store();
+  const tab = s.tabs[tabId];
+  const row = s.tabs[rowTabId];
+  if (!tab || !row || !splitsOnRow(s, tabId, rowTabId)) return null;
+  const split = splitOf(s, rowTabId);
+  const panes = splitTabIdsOf(split);
+  if (panes?.includes(tabId)) return null;
+  const rowPanes = panes?.filter((id) => s.tabs[id] && splitLane(s.tabs[id]!) === splitLane(row));
+  const anchor = rowPanes?.length ? (side === "left" ? rowPanes[0]! : rowPanes.at(-1)!) : rowTabId;
+  const stacked = split?.orientation === "vertical";
+  if (!dropTabIntoSplit(tabId, anchor, stacked ? (side === "left" ? "top" : "bottom") : side)) return null;
+  const now = store().tabs[tabId];
+  return { adopted: now && splitLane(now) !== splitLane(tab) ? splitLane(now) : null };
 }
 
 export function closePane(tabId: string) {
@@ -114,4 +147,3 @@ export async function showSplitMenu(tabId: string) {
 export const updateSplit = storeAction("updateSplit");
 export const replaceSplitPane = storeAction("replaceSplitPane");
 export const removeTabFromSplit = storeAction("removeTabFromSplit");
-export const toggleTabLayout = storeAction("toggleTabLayout");

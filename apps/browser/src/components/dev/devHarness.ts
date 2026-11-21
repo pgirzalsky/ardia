@@ -16,6 +16,32 @@ import { useLifecycle } from "../../state/tabs/tabLifecycle";
 import { webviews } from "../../platform/webviews";
 import { call, on } from "../../platform/engine";
 
+export function devPluginSeams(): (typeof import("../../state/plugins/store") &
+  typeof import("../../state/plugins/lifecycle") &
+  typeof import("../../state/plugins/pages") &
+  typeof import("../../state/plugins/tools") &
+  typeof import("../../state/plugins/commands") &
+  typeof import("../../state/plugins/socketMethods") &
+  typeof import("../../state/plugins/process") &
+  typeof import("../../state/plugins/official") & {
+    snapshotPage: typeof import("../../platform/plugins").devSnapshotPluginPage;
+    startNative: typeof import("../../platform/plugins").startPluginProcess;
+  }) | null {
+  if (!__DEV__) return null;
+  return {
+    ...require("../../state/plugins/store"),
+    ...require("../../state/plugins/lifecycle"),
+    ...require("../../state/plugins/pages"),
+    ...require("../../state/plugins/tools"),
+    ...require("../../state/plugins/commands"),
+    ...require("../../state/plugins/socketMethods"),
+    ...require("../../state/plugins/process"),
+    ...require("../../state/plugins/official"),
+    snapshotPage: require("../../platform/plugins").devSnapshotPluginPage,
+    startNative: require("../../platform/plugins").startPluginProcess,
+  };
+}
+
 export function startDevHarness() {
   probeStore("pages", usePages);
   probeStore("sidebarUi", useSidebarUi);
@@ -35,10 +61,19 @@ export function startDevHarness() {
   const ac = {
     store: useBrowser, actions, runCommand, webviews, shell, engine: { call, on }, omnibox: omniboxDrivers, pages: pagesDrivers,
     pageState: usePages,
+    get downloads(): typeof import("../../state/downloads/progress") {
+      return require("../../state/downloads/progress");
+    },
     openSettings,
     favicons,
     get bookmarks(): typeof import("../../state/bookmarks/bookmarks") {
       return require("../../state/bookmarks/bookmarks");
+    },
+    get persistence(): typeof import("../../state/session/persist") {
+      return require("../../state/session/persist");
+    },
+    get tabLive(): typeof import("../../state/tabs/tabLive") {
+      return require("../../state/tabs/tabLive");
     },
     get history(): typeof import("../../state/history/history") {
       return require("../../state/history/history");
@@ -51,6 +86,10 @@ export function startDevHarness() {
     },
     get onboarding(): typeof import("../../state/onboarding/onboarding") {
       return require("../../state/onboarding/onboarding");
+    },
+    get interfaceScale(): typeof import("../../state/settings/interfaceScale") & { pixelRatio: number; hairline: number } {
+      const rn: typeof import("react-native") = require("react-native");
+      return { ...require("../../state/settings/interfaceScale"), pixelRatio: rn.PixelRatio.get(), hairline: rn.StyleSheet.hairlineWidth };
     },
     get media(): typeof import("../../state/media/media").useMedia {
       return require("../../state/media/media").useMedia;
@@ -71,7 +110,7 @@ export function startDevHarness() {
       return require("../../state/app/toasts").useToasts;
     },
     get extensions(): typeof import("../../state/extensions/actions") {
-      return require("../../state/extensions/actions");
+      return { ...require("../../state/extensions/actions"), ...require("../../state/extensions/toolbarAnchors"), ...require("../../state/extensions/toolbarOrder") };
     },
     get themes(): typeof import("../../state/import/apply") & typeof import("../settings/ThemeEditor") {
       return { ...require("../../state/import/apply"), ...require("../settings/ThemeEditor") };
@@ -87,6 +126,12 @@ export function startDevHarness() {
     },
     get switcher(): typeof import("../../state/sidebar/switcher") {
       return require("../../state/sidebar/switcher");
+    },
+    get reveal(): typeof import("../../state/sidebar/reveal") {
+      return require("../../state/sidebar/reveal");
+    },
+    get tileFolders(): typeof import("../../state/pins/tileFolders") & typeof import("../../state/sidebar/tileFolderUi") {
+      return { ...require("../../state/pins/tileFolders"), ...require("../../state/sidebar/tileFolderUi") };
     },
     get sidebarRows(): typeof import("../../state/sidebar/sidebarUi") {
       return require("../../state/sidebar/sidebarUi");
@@ -131,6 +176,7 @@ export function startDevHarness() {
       return require("../settings/panes/SyncSheets");
     },
     get menus(): typeof import("../../state/sidebar/menus") &
+      typeof import("../../state/sidebar/liveMenus") &
       typeof import("../../state/site/reloadMenu") &
       typeof import("../profiles/profileMenu") &
       typeof import("../../state/bookmarks/bookmarkMenus") &
@@ -141,6 +187,7 @@ export function startDevHarness() {
       return {
         useBookmarkDialog: require("../../state/bookmarks/actions").useBookmarkDialog,
         ...require("../../state/sidebar/menus"),
+        ...require("../../state/sidebar/liveMenus"),
         ...require("../../state/site/reloadMenu"),
         ...require("../profiles/profileMenu"),
         ...require("../../state/bookmarks/bookmarkMenus"),
@@ -155,6 +202,11 @@ export function startDevHarness() {
       const { WhatsSentSheet } = require("../settings/panes/ShareDiagnostics") as typeof import("../settings/panes/ShareDiagnostics");
       showSettingsSheet(createElement(WhatsSentSheet));
     },
+    showFilterLists: () => {
+      const { showSettingsSheet } = require("../../state/settings/sheet") as typeof import("../../state/settings/sheet");
+      const { FilterListsSheet } = require("../settings/panes/FilterListsSheet") as typeof import("../settings/panes/FilterListsSheet");
+      showSettingsSheet(createElement(FilterListsSheet));
+    },
     get config(): typeof import("../../state/config/basePalette") & typeof import("../../state/config/configFiles") & typeof import("../../state/app/toasts") {
       return { ...require("../../state/config/basePalette"), ...require("../../state/config/configFiles"), ...require("../../state/app/toasts") };
     },
@@ -166,6 +218,30 @@ export function startDevHarness() {
     },
     get automation(): typeof import("../../state/automation/approvals") & typeof import("../../state/automation/hookRules") & typeof import("../../state/automation/hookPolicy") & typeof import("../../state/automation/decideSocket") {
       return { ...require("../../state/automation/approvals"), ...require("../../state/automation/hookRules"), ...require("../../state/automation/hookPolicy"), ...require("../../state/automation/decideSocket") };
+    },
+    get plugins() {
+      return devPluginSeams();
+    },
+    get passwordManager(): typeof import("../../state/site/passwordManager") & typeof import("../../state/site/verificationCodes") {
+      return { ...require("../../state/site/passwordManager"), ...require("../../state/site/verificationCodes") };
+    },
+    get airTraffic(): typeof import("../../state/airTraffic/store") & typeof import("../../state/airTraffic/preview") & typeof import("../../state/littleArdia/actions") {
+      return { ...require("../../state/airTraffic/store"), ...require("../../state/airTraffic/preview"), ...require("../../state/littleArdia/actions") };
+    },
+    blockJs(ms: number, garbage = false) {
+      setTimeout(() => {
+        const until = Date.now() + ms;
+        let kept: number[][] = [];
+        while (Date.now() < until) {
+          if (!garbage) continue;
+          kept.push(new Array(256).fill(kept.length));
+          if (kept.length > 4000) kept = [];
+        }
+      }, 0);
+      return ms;
+    },
+    get freezes(): typeof import("../../state/telemetry/freezes") & typeof import("../../state/telemetry/freezeRecords") {
+      return { ...require("../../state/telemetry/freezes"), ...require("../../state/telemetry/freezeRecords") };
     },
   };
   (globalThis as { ac?: typeof ac }).ac = ac;

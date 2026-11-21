@@ -7,7 +7,7 @@ results; a cold run spends most of its time in `swift test`'s first build. Each 
 | Package | Command | What runs |
 | --- | --- | --- |
 | `apps/browser` | `pnpm --filter @ardia/browser test` | Every `src/**/*.test.mjs` under the test loader (below) |
-| `packages/core` | `pnpm --filter @ardia/core test` | `apps/ios/scripts/bundle-shared.mjs --check`, then `src/**/*.test.ts` |
+| `packages/core` | `pnpm --filter @ardia/core test` | `apps/phone/scripts/bundle-shared.mjs --check`, then `src/**/*.test.ts` |
 | `packages/sync` | `pnpm --filter @ardia/sync test` | `swift test`, `node --test`, the shared bundle check, then the rename's launch migration end to end (`scripts/legacy-migration-e2e.mjs`) |
 | `packages/import` | `pnpm --filter @ardia/import test` | `swift test` |
 | `packages/shell` | `pnpm --filter @ardia/shell test` | `swift test` (the updater's channel switch among them) |
@@ -18,7 +18,8 @@ results; a cold run spends most of its time in `swift test`'s first build. Each 
 `apps/browser` runs its TypeScript under plain Node, with the real `@ardia/shell` and `@ardia/ardiacore` code:
 `src/test-loader.mjs` swaps only the native side. `expo-modules-core` becomes `src/test-native/expo.ts`, which hands
 each package the fake of every native module it asks for (`src/test-native/shell.ts`, `src/test-native/ardiacore.ts`),
-and `react-native` a few inert views; the packages' `.tsx` files are transpiled with TypeScript on the way in (cached in
+and `react-native` inert views: `View` renders its children and every `Pressable` a render passes is kept in
+`pressables` so a test can press it (rendered with `react-dom/server`, `src/components/site/siteExtensionsManage.test.mjs`); the packages' `.tsx` files are transpiled with TypeScript on the way in (cached in
 `node_modules/.cache/ardia-test-tsx`). The native surface is listed once per package, in `src/nativeModules.ts`
 (`ShellNativeModules`, `ArdiaCoreNativeModules`), and the packages can only ask for modules listed there. Each fake is
 typed against that list, so `pnpm -C apps/browser typecheck` fails when a native method is added, removed or changed
@@ -36,23 +37,27 @@ holds the rest.
 | Shortcuts | `node apps/browser/scripts/shortcuts-test.mjs <Debug app>` | Every shortcut in every focus (0.2.8: ⌘1–9 were swallowed outside a page) |
 | Profile swipes | `node apps/browser/scripts/profile-swipe-test.mjs <Debug app>` | The native pager's races (0.2.14–0.2.18 fixes) |
 | Tab dragging | `node apps/browser/scripts/tab-drag-test.mjs <Debug app>` | Dragging in the top tab strip moves the tab, never the window (0.2.18); the empty strip moves it over its whole height and a double-click zooms (0.2.25); the empty sidebar under the rows moves it too, and a double-click there still opens a tab; a chip click whose pointer drifts up to 9 pt still opens the tab, a split pane's too (#947); a tab's hover card shows under the strip after 0.5 s, moves to the next tab at once, takes no presses and leaves the tabs beside it untouched |
-| Windowing | `node apps/browser/scripts/windowing-test.mjs <Debug app>` | Window frames and what the screen shows in passing |
+| Title-bar drag regions | `node apps/browser/scripts/drag-region-test.mjs <Debug app>` (`--every-mount` runs the `dragRegionEveryMount` experiment and prints its rebuild count) | A window's drag region is rebuilt lazily (#1682): a change the pointer wasn't over leaves it stale, and it is rebuilt when the pointer reaches the title bar, when the window moves under a still pointer, or 2 s later; a change with the pointer in the title bar rebuilds at once. After a tab added, the sidebar resized, hidden and shown, and a title change, the region the pointer's arrival leaves equals a full rebuild's (`devDragRegionRects` against `devDragBlockedRects`), the empty title bar is the window server's to drag, and no drag region point is blocked; 40 title changes in 6 s cost at most 5 rebuilds |
+| Windowing | `node apps/browser/scripts/windowing-test.mjs <Debug app>` | Window frames and what the screen shows in passing; Settings answers `AXDialog` and Little Ardia `AXSystemFloatingWindow`, so tiling window managers (AeroSpace) float them, while the main window stays `AXStandardWindow` |
 | ⌘-scroll | `node apps/browser/scripts/zoom-scroll-test.mjs <Debug app>` | Trackpad scrolls, mouse zooms (regressed in 0.1.4 and 0.2.12) |
 | Hidden panes | `node apps/browser/scripts/hidden-pane-test.mjs <Release app>` (a Debug app fails five `shown:` checks) | What changes while a tab is hidden (URL, title, loading, zoom, find bar, a permission prompt) is on screen the moment it is shown |
 | Layout shifts | `node apps/browser/scripts/layout-shift-test.mjs <Release app>` (reads a probe a Debug app's React dev hook replaces) | Nothing already on screen moves when late content arrives |
 | Window toolbar | `node apps/browser/scripts/window-toolbar-test.mjs <Release app>` (31 of 39 checks fail on a Debug app) | The toolbar's buttons and layout in each window kind |
 | Hover layout | `node apps/browser/scripts/hover-shift-test.mjs <Debug app>` | Hovering moves nothing: every hover-tracked view in the sidebar, the tab strip and the downloads popover (below) |
+| Symbol geometry | `node apps/browser/scripts/symbol-geometry-test.mjs <ad hoc Debug app> [cdpPort] [metroPort]` | Live-folder status changes and interface-scale transitions keep every symbol image inside its bounds, including the hidden image used again at window scale |
 | Sidebar clicks | `node apps/browser/scripts/sidebar-click-test.mjs <Debug app>` | One click opens a tab or pinned tile: in the frame its hover card appears, under another tile's appearing card, after a New Tab and after closing a pinned tab (0.2.39-nightly.5: tabs needed two clicks), and when the pointer drifts up to 9 pt between press and release, while a 14 pt press stays a drag (#947) |
 | Menus | `node apps/browser/scripts/menus-test.mjs <Debug app> [--only=<regex>]` | Right-clicks on the sidebar's rows, tiles, split panes, groups, header, footer and background open their menu, and each item does what it says (tab, several-tab, group, sidebar, Top Apps, reload button, profile, bookmark, history, download and extension menus; moves between profiles and windows, private windows refused); the page menu's Copy Link Address, Save Link As… cancelled, Back and Forward. Menus come from `ac.menus` in the dev harness where nothing can be right-clicked |
 | Onboarding | `node apps/browser/scripts/onboarding-test.mjs <Debug app>` | No text field sits behind the onboarding card, a click on the first row's checkbox toggles it, another window keeps its New Tab field meanwhile, and the New Tab field is back and focused once it ends, in a bar of the same height (the hidden New Tab field took the first row's cursor and its checkbox clicks) |
 | New Tab row hover | `node apps/browser/scripts/newtab-row-hover-test.mjs <Debug app> [--trials=6]` | Click the sidebar's New Tab row, open a page from the New Tab page, move the pointer off: every view the pointer entered heard it leave, with new tabs next to the current one and at the bottom (#1280: the row's size changed under the pointer as the new tab slid in, its tracking area was remade, and it stayed highlighted) |
 | Sidebar scroll | `node apps/browser/scripts/sidebar-scroll-test.mjs <Debug app>` | The pinned tiles hold still while the tabs scroll (Dia's dock), with the address field in the sidebar and without: a row dragged onto a tile after a scroll pins it there, selecting a tile while scrolled leaves the list put, and a dock too tall for the window scrolls with the tabs; after a change to another profile's page, a click on a tab in view leaves the list put |
+| Sidebar slides | `node apps/browser/scripts/sidebar-slide-test.mjs <Debug app> [--trials=3]` | Closing a tab leaves no blank space: the rows below slide up, every slide rests at 0, and the sidebar looks the same before and after every row renders again. Also when the list updates while the slides still run later than they should have finished (a close that kept the app busy), and when a row renders just as its slide ends; both left a row one place down with a blank space above it (#2186) |
 | Settings layout | `node apps/browser/scripts/settings-shift-test.mjs <Debug app> [--panes a,b] [--attach <data dir>] [--keep]` | Every Settings pane, the first right after the window opens: nothing moves, appears, disappears or changes between its first frame on screen and once it has settled; ⌘F, typing, Return and Escape in Settings search |
-| Peek | `node apps/browser/scripts/peek-edge-test.mjs <Debug app>` | The auto-hidden sidebar's peek: a pointer resting on the window's top or bottom edge beside it keeps it out, one well past the edge closes it, an edge crossing outside its column never opens it, and pressing another space's dot keeps it out |
+| Peek | `node apps/browser/scripts/peek-edge-test.mjs <Debug app>` | The auto-hidden sidebar's peek: a pointer resting on the window's top or bottom edge beside it keeps it out, one well past the edge closes it, an edge crossing outside its column never opens it, pressing another space's dot keeps it out, and with the window against a screen edge another display shares, the pointer crosses without being held, an overshoot that comes straight back peeks, and crossing again closes the peek at once |
 | Import window | `node apps/browser/scripts/import-flow-test.mjs <Debug app> <scratch dir> [flow…] [--record <file>] [--compare <file>] [--keep]` | Every flow of the import window (Chrome with unlock, skip and back, Arc, Firefox, Dia, Safari direct, export and a bad file) against `packages/import/fixtures`, with a background-only stand-in for Dia, never a real profile |
 | Sync | `node packages/sync/scripts/e2e.mjs <Debug app>` | Two and three hidden instances through one folder (`docs/sync.md`) |
 | Import | `node packages/import/scripts/e2e.mjs <Debug app> <scratch dir>` | Cookies, addresses and cards from a fake Chrome home (`packages/import/README.md`) |
-| Video upscaling | `node apps/browser/scripts/video-upscaling-test.mjs <Debug app> [--keep] [check…]` (`--list`) | What the GPU process upscales in every state the gate decides (playing, paused, native size, background tab, app inactive, occluded, Low Power, thermal, PiP, HDR, full screen, Little Ardia, setting off), from its `ArdiaVSR.*` trace events and `videoUpscalingState()` |
+| Video upscaling | `node apps/browser/scripts/video-upscaling-test.mjs <Debug app> [--keep] [check…]` (`--list`) | What the GPU process upscales in every state the gate decides (playing, paused, native size, a source over 720p, background tab, app inactive, occluded, Low Power, thermal, screen sharing (acted, and a real tab share through the picker), PiP, HDR, full screen, Little Ardia, setting off), from its `ArdiaVSR.*` trace events and `videoUpscalingState()` |
+| PiP click to skip | `node apps/browser/scripts/pip-click-seek-test.mjs <Debug app> [--keep] [--expect-no-seek]` | A click on the left or right of the video Picture in Picture window skips 10 s back or ahead, and each click of a quick double or triple click skips again; the centre column, a drag (also one that only passes 3 pt at the release), a dead-band double-click and a stashed window never seek; the video in the window is the one that moves, even paused while another plays; a page with only a `seekto` handler is asked on the timeline it reported, kept current through repeated clicks and a pause though it reports once, also for a video in a closed shadow root; Chrome's close button still closes (#1735). `--expect-no-seek` runs it against a build from before, where no click moves the video |
 | Engine patches | `python3 engine/patches/series.py check` | The patch series reproduces the Chromium tree (`docs/engine-build.md`) |
 | Engine (ArdiaCore) | `node packages/ardiacore/scripts/acceptance.mjs <Debug app> <scratch dir> [--keep] [check…]` | The app on ArdiaCore, hidden (`docs/ardiacore-parity.md`). `--keep` leaves the instance up and `--attach <scratch dir> [check…]` re-runs checks on it in seconds; `--list` gives each check's section and what it needs (brought along automatically) |
 | Focus (ArdiaCore) | `node packages/ardiacore/scripts/activation-acceptance.mjs <Debug app> <scratch dir> [check…]` | The panes shown, Chrome's active tab and native focus agree |
@@ -127,6 +132,29 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   history, download and extension menus) are written to `<data dir>/menu.json` as the items JS built, and resolve with
   the id in `menu.json.pick` (read and deleted; an id that isn't an enabled item, or no file, resolves `null`, as a
   dismissed menu). Write the pick before the right-click (`windows.dev` `click:<x>,<y>,right`).
+- **Interface size.** `--arg=-interfaceScale --arg=1.25` starts an instance at that scale: native reads it before the
+  first window, and JS keeps it as long as the data dir never chose a size (once `interfaceScale` is chosen, the saved
+  value wins and is pushed to native at launch). Live: `ac.store.getState().updateSettings({ interfaceScale: 1.25 })` (the setting's own path: JS, native and
+  storage; calling `ArdiaApp.setInterfaceScale` directly changes native only and leaves JS at the old size), or
+  through the Settings row with `--test appMenu`: write the percent (`125`) to `menu.json.pick` and
+  `ac.shell.devClick("settings", { label: "Interface size" })`; `{ label: "Back to 100%" }` resets. `ac.interfaceScale`
+  in the dev harness has the current scale, `pixelRatio` and `hairline`. For a real 1× backing scale (pixel checks),
+  add `--arg=-AppleMagnifiedMode --arg=YES` (low resolution mode, `devicePixelRatio` 1). Dev clicks and `windows.dev`
+  points are root points.
+- **`applePasswordsPanel`** (password manager plugins, `docs/plugins.md` › passwordManager): background mode only logs
+  `[ardiacore] system passwords panel (background mode, not shown)` for the key and Edit › AutoFill › Passwords…; with
+  this key it sends AppKit's `_handleInsertFromPasswordsCommand:` for real and logs the first responder, the target and
+  whether AppKit took it (`log show --predicate 'eventMessage CONTAINS "system passwords panel"'`). Apple's panel
+  belongs to another process and can show on screen, so use it only with the screen locked or the owner's OK. After a
+  send it logs `held=1`: AppKit's own show-or-hide pass is held for 1.5 s, since its delayed dismiss used to cancel a
+  panel still opening. A pass skipped meanwhile runs once when the hold ends (`hold ended, replaying …`), and the hold
+  ends at once if the send is refused or focus leaves the page (`hold ended early`). It then compares the Passwords
+  panel windows on screen with those there before the send, at 0.6 s and again at 1.5 s, and logs `seen`, `missing`
+  (reported as `noPanel`, which opens nothing in Ardia) or `unchecked` (another app's window names were hidden). Every
+  refusal logs `refused reason=<reason> via=<badge|menu> field=<username|password|code|other>`.
+- **`systemPanelRace`**: right after sending the Passwords command, runs AppKit's
+  `_showOrHideAutoFillForCurrentTextInputContextIfAppropriate` at once, while Ardia is still active: the ordering that
+  lost the panel before the hold. Use it with a visible instance to check the panel still shows.
 - **`appDialog`**: `confirm` and `prompt` write their options (and `kind`) to `<data dir>/dialog.json` and answer from
   `dialog.json.pick` (deleted): `confirm` (with `,suppress` to tick the suppression box) or anything else to cancel; a
   prompt's answer is the text, empty to cancel. With no pick file they run as usual (background mode cancels).
@@ -143,12 +171,20 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   closed, the prevents-activation tag, app activations), `hover` holds the controls up (`pip-hover.json`, `pipHover`),
   `style` runs the style self-test (`pip-selftest.json`), all in the data dir.
   `tabs.devPictureInPictureAction` also takes `alpha:<0–1>` (WindowServer alpha, so a hidden run's PiP window can be
-  captured with `screencapture -l`), `mouse:<moved|down|up>:<x>,<y>` (top-left points), `stash` and `handle` (toggles
-  the stash handle's hover).
+  captured with `screencapture -l`), `mouse:<moved|down|dragged|up>:<x>,<y>[:<clicks>]` (top-left points; the click
+  count defaults to 1), `stash` and `handle` (toggles the stash handle's hover), `skip` (JSON: the last click skip's
+  seconds, point and click count, and how many there were) and `skip:<seconds>` (the click skip's own path),
+  `interactive` (test instances: shows a hidden run's PiP window and lets it take the pointer, for real-pointer checks with
+  `peekaboo move`), `resizeCursor` (JSON: AppKit's resize direction at points along each edge and the cursor we'd show,
+  with counters) and `resizeCursor:<on|off>` (turns the edge resize cursor on or off, for before/after runs).
 - **`allowOcclusion`**: macOS posts no occlusion change for a window a band below normal, so minimizing and
   deminiaturizing post one for it (the page goes hidden as in a user's minimized window).
-- **The `ardia` command** (`cliHome`, `cliBinDir`, `cliUrl` (`file://` works), test `cliInstallScript`): a test
-  instance installs or upgrades only with the first two set, so it never touches the real home. Its
+- **The `ardia` command** (`cliHome`, `cliBinDir`, `cliUrl` (`file://` works), test `cliInstallScript`, test
+  `bundledPlugins`): on macOS a test instance links the built-in `cli` plugin only into `cliBinDir` and adopts an old
+  install only from `cliHome`, so it never touches the real home; give it the plugin folder with
+  `ARDIA_TEST bundledPlugins=<dir>` (`scripts/release/official-plugins.py bundle <dir>` for the pinned ones, or
+`plugins/cli/build.sh <dir>` in ardia-browser/plugins for a local one), since a Debug build bundles none. On Linux a
+  test instance installs or upgrades only with the first two set. Its
   `--remote-debugging-port` makes the "Let the ardia command control Ardia" setting stand aside; test that setting in an
   instance launched without one.
 
@@ -165,7 +201,10 @@ Launch with `scripts/agent/ac launch <app> --data <dir> [--instance K=V] [--test
   script times the up itself. AppKit still keeps an inactive app's first click on unselected text or a page to
   itself: `devWindow(n, "fakeActiveClicks")` lets them through, as in the active app. `devWindow(n,
   "responderChanges")` lists the first-responder changes since the last call with their stacks (who took a field's
-  focus).
+  focus). `devWindow(n, "hoverProbe:responderNil:1")` resigns the first responder (`:0` only reads it), and
+  `"hoverProbe:check:<x>,<y>,click"` runs the hover probe as a click there; `"hoverProbe"` lists the episodes it emitted.
+  `"hoverProbe:watch:1"` turns on the click and move watch in a hidden instance (`:0` turns it off), so a `devClick`
+  after `responderNil:1` goes through the same path as a user's click.
 - **Windows:** they stay behind every other app's windows: each window's level is set a band below normal (normal at
   CoreGraphics layer -1000000, floating at -999997…; `-level` answers the one asked for), so no ordering, activation
   attempt or AppKit reshuffle lifts one over the owner's, the app's own keep production's order, and Mission Control
@@ -208,7 +247,8 @@ the app as a person would rather than writing a new helper:
 
 A control that shows on hover (a row's ✕, a live folder's refresh, Show in Finder) goes in a `HoverSlot`
 (`components/ui/HoverSlot.tsx`): the slot keeps the width of what it shows at rest, at least the control's, and the control
-lies over it. `useHover` and `useRowHover` mark their handlers, and the dev harness's `ac.hoverShift.check({ scopes })`
+lies over it. A slot that takes room only on hover (`reserve="hover"`) and shows nothing at rest mounts no view until the hover,
+and the check counts it as opening from no width. `useHover` and `useRowHover` mark their handlers, and the dev harness's `ac.hoverShift.check({ scopes })`
 (`src/components/ui/hoverShift.ts`) hovers each marked view inside the named components in turn, measures every view under its
 parent before and while hovered, and returns what moved or resized; only a HoverSlot's inside may change.
 `hover-shift-test.mjs` runs it on the sidebar (with groups, a live folder and its open items), the tab strip and the
@@ -224,6 +264,7 @@ lose or leak data, or when the bug is invisible by eye and has shipped before.
 | `apps/browser/src/state/browser/privacy.test.mjs` | Private windows and incognito: nothing in `session.json`, `downloads.json` or favicon files, no history, no closed-tab records, no dragging tabs across; history time-range clearing; profile deletion queues Chrome's data and keeps shared data | Privacy and data loss. 0.2.11 shipped private tabs saved to disk and a deleted profile's data left behind |
 | `apps/browser/src/state/session/session.test.mjs` | v1 → v2 migration; `hydrate` repairing a damaged session; reopened windows keeping back/forward (0.2.12); shared profile data across a reload; `history.json`'s hand-written serializer; pinned tabs unloading on ⌘W, parking with a closed window, coming back once, surviving a relaunch (0.2.2, 0.2.8) | Session and history persistence |
 | `apps/browser/src/state/tabs/tabs.test.mjs` | Opener placement and close → activate rules; group contiguity; broken splits dropped; clean-up and abandoned New Tab cleanup never closing a window or the shown tab; Chrome's echo of the app's own tab switch; an extension's default search engine; the mini player staying closed (0.2.12) | Core behaviour that's hard to see by eye |
+| `apps/browser/src/state/tabs/navigation.test.mjs` | Back on a tab a link opened, with no history of its own, closes it and shows the opener (opened in front, and opened behind then switched to); back on the first of two links opened behind shows the opener, not the other link; a page with history, a pinned tab, a tab with no opener and a tab whose opener is gone all stay; back does nothing on a link-opened tab whose opener closed, even when the opener's opener adopts it, while a link opened in a split pane closes back to its opener like any other; a tab opened by hand beside the current one (nextToCurrent placement) offers no back-close once it has a page; back on a Peek with no history of its own ends the Peek and shows the tab it was opened from (a Peek whose page has history goes back in the page instead, a Peek opened from a pinned tab leaves the pin alone, and a Peek expanded into a tab closes back to its opener like any other link-opened tab) | #857: Back was a dead end on a tab a link opened |
 | `apps/browser/src/components/omnibox/inline.test.mjs` | Every interleaving of typing and inline completion; stale completions never applied | 0.1.6: fast typing dropped or reordered letters |
 | `apps/browser/src/state/sync/adapters.test.mjs`, `engine.test.mjs` | Bookmark delete-vs-add and move cycles, parked pinned tabs, passwords (newest wins); a crash right after a batch lands; nothing published before its journal is on disk | Sync data loss (0.2.11) |
 | `apps/browser/src/state/sync/pairs.test.mjs` | Two in-memory Macs, every ordered pair of pinned-tab edits (pin, unpin, re-pin, row/tile, moves into groups, new groups, group unpin/re-pin/delete/restyle, rename, loaded pages, a member's page, a trip away and back, and a page copied to a new mirror before its window closes, profile moves) and lifecycle steps (park and reopen, a mirror window, a relaunch through the saved session, a snapshot collecting tombstones 46 days on) in six schedules (one after the other, concurrent, concurrent with a third Mac running the shipped 0.2.38 pinned adapter and scope from `fixtures`, either Mac's log delayed, a third Mac joining from the folder after B's delayed log, A's first log 44 days late while B compacts and a third Mac joins from that snapshot, without the ops that compact again), 7,402 runs in about 8 s: all Macs converge on the same pins, names, icons and group styles, every record names a group that exists, nothing pinned or kept regular is lost, the Mac that unpins a group keeps it, windows, splits and groups stay whole and ordered, each edit's outcome holds (renames, restyles, the page a Mac navigated to is sent, the later explicit choice), and nothing is sent once settled. Fourteen more cases: a member waiting for a group that never comes stands alone after 90 days on an idle Mac; seven page changes (a member navigated behind another window, copied to a new mirror whose window then closes, copied to a third window, a new group's mirror navigated before its first sync, navigated and unpinned then re-pinned elsewhere, a tile navigated then moved into a group, a mirror copy navigated in front), each with and without an edit from the other Mac, sent exactly as the shipped 0.2.38 adapter sends them, checked side by side; a Mac keeps the regular group it unpinned when the other restyles the pinned one; and, as documented in `docs/sync.md`, two Macs showing a pin at different pages, the page-change-versus-unpin conflict and three compaction residuals. The settle checks let a pin two Macs show at different pages keep sending; anything else must go quiet | Concurrent pinned-tab sync (0.2.40) |

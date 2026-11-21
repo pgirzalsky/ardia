@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 const { useBrowser } = await import("../browser/store.ts");
 const { profileFor } = await import("../browser/model.ts");
 const { startWindowCloseGuard } = await import("./windowClose.ts");
 const { closeTab } = await import("../browser/actions.ts");
 const { shellNativeModules, windows } = await import("../../test-native/shell.ts");
+const { takeWindowPlacementCounts } = await import("../telemetry/windowPlacementCounts.ts");
 
 const S = () => useBrowser.getState();
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -120,6 +122,45 @@ test("with sharing on, a profile no other window shows moves to the open window 
   assert.ok(listed(a, work).includes(S().windows[a].activeTabIds[work]), "A remembers a Work tab to show");
   assert.equal(listed(a).length, 3, "A's own tabs untouched");
   assert.ok(!S().closedWindows.some((c) => c.tabs.some((t) => t.url?.startsWith("https://w"))), "not recorded as closed");
+});
+
+test("with sharing on, a profile handed to the open window keeps its pinned tabs and pinned folders (#2175)", async () => {
+  const { a, b } = twoWindows();
+  const work = S().createProfile({ name: "Work" });
+  const pin = S().newTab(b, { url: "https://pin.com", profileId: work, background: true });
+  const inFolder = S().newTab(b, { url: "https://folder.com", profileId: work, background: true });
+  const loose = S().newTab(b, { url: "https://loose.com", profileId: work, background: true });
+  S().pinTabs([pin], true);
+  const folder = S().groupTabs([inFolder], { pinned: true, name: "Folder" });
+  assert.equal(listed(a, work).length, 0, "only B shows Work");
+  takeWindowPlacementCounts();
+  await closeByUser(b);
+  assert.equal(S().windows[b], undefined, "B closed");
+  assert.ok(listed(a, work).includes(loose), "Work's unpinned tab moved to A");
+  assert.equal(S().parkedPins[work], undefined, "nothing waits in the park: A shows Work and holds its pins");
+  S().switchProfile(a, work);
+  const shown = listed(a, work).map((id) => S().tabs[id]);
+  const pinned = shown.find((t) => t.pin && (t.pinKey ?? t.id) === pin);
+  assert.ok(pinned, "Work's pinned tab is in A");
+  assert.equal(pinned.pinnedUrl ?? pinned.url, "https://pin.com");
+  const folders = Object.values(S().groups).filter((g) => g.pinned && g.windowId === a && g.profileId === work);
+  assert.deepEqual(folders.map((g) => [g.pinKey ?? g.id, g.name]), [[folder, "Folder"]], "and its pinned folder");
+  assert.deepEqual(folders[0].tabIds.map((id) => S().tabs[id].url), ["https://folder.com"]);
+  assert.ok(listed(a, work).includes(loose), "the unpinned tab is still there");
+  assert.equal(listed(a, work).length, 3);
+  assert.equal(takeWindowPlacementCounts().window_close_pins_kept, 2, "counted: the pinned tab and the folder's tab");
+});
+
+test("with sharing on, a profile neither handed over nor shown elsewhere still parks its pins", async () => {
+  const { a, b } = twoWindows();
+  const work = S().createProfile({ name: "Work" });
+  const pin = S().newTab(b, { url: "https://pin.com", profileId: work, background: true });
+  S().pinTabs([pin], true);
+  await closeByUser(b);
+  assert.equal(listed(a, work).length, 0, "A doesn't show Work");
+  assert.deepEqual(S().parkedPins[work]?.tabs.map((t) => t.id), [pin], "Work's pin is parked");
+  S().switchProfile(a, work);
+  assert.ok(listed(a, work).some((id) => (S().tabs[id].pinKey ?? id) === pin && S().tabs[id].pin), "and comes back in A");
 });
 
 test("with sharing off, a profile only the closing window shows still closes with it", async () => {
@@ -288,4 +329,46 @@ test("⌘W right after moving a window: the frame the native close flushes is th
   assert.equal(S().windows[b], undefined, "B closed");
   assert.deepEqual(S().closedWindows.at(-1).window.frame, [444, 333, 1100, 700]);
   assert.ok(S().windows[a]);
+});
+
+test("Settings and Import close through the same request as browser windows, from every way they can be closed", async () => {
+  windows.open.set("settings", { kind: "settings", title: "Settings" });
+  windows.emit({ type: "closeRequest", id: "settings" });
+  await tick();
+  await tick();
+  assert.equal(windows.open.has("settings"), false, "a close request for Settings closes it");
+  const source = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+  assert.match(source("./windowClose.ts"), /if \(!w\) return closeWindowWithoutTabs\(windowId, onceAgreed\);/);
+  assert.match(source("./controls.ts"), /export const closeFromWindowControls = \(windowId: string\) => requestWindowClose\(windowId\);/);
+  assert.match(source("../commands/commands.ts"), /if \(command === "closeTab"\) return requestWindowClose\(target\.windowId\);/);
+  assert.match(source("../import/flow.ts"), /export const closeImport = \(\) => requestWindowClose\(IMPORT_WINDOW_ID\);/);
+  assert.match(source("../../../windows/Ardia/WindowManager.h"), /if \(!found \|\| !m_context \|\| m_quitting\) return;\n\s+try \{\n\s+args\.Cancel\(true\);/);
+  assert.match(source("../../platform/nativeApi.ts"), /windows\.addListener\?\.\("onWindowEvent", \(event\) => \{\n\s+if \(event\.type === "closeRequest"\) void windows\.closeWindow\(event\.id\);/);
+  assert.match(source("../../platform/nativeApi.ts"), /^import type \{ WindowsNative \} from "@ardia\/shell";\n[\s\S]*type Windows = Pick<WindowsNative, "openWindow" \| "closeWindow"> & Partial<Pick<WindowsNative, "addListener">>;/, "the skew window reuses the shell's window types, and only as a type");
+});
+
+test("Settings and Import closes are decided one at a time, so two at once can't both miss the quit question", async () => {
+  windows.open.set("settings", { kind: "settings", title: "Settings" });
+  windows.open.set("import", { kind: "import", title: "Import" });
+  windows.emit({ type: "closeRequest", id: "settings" });
+  windows.emit({ type: "closeRequest", id: "import" });
+  for (let i = 0; i < 6; i++) await tick();
+  assert.equal(windows.open.has("settings"), false);
+  assert.equal(windows.open.has("import"), false);
+  const close = readFileSync(new URL("./windowClose.ts", import.meta.url), "utf8");
+  assert.match(close, /const closing = windowsWithoutTabsClosing\.then\(async \(\) => \{\n\s+if \(\(await askBeforeQuitting\(windowId\)\) === "cancelled"\) return;\n\s+onceAgreed\?\.\(\);\n\s+startClosingWindow\(windowId\);/);
+});
+
+test("the Windows self-check closes Settings, Import and a pop-up the ways users and pages do, and ends by closing its last window", () => {
+  const selfCheck = (name) => readFileSync(new URL(`../../../../../packages/expo-windows/src/${name}`, import.meta.url), "utf8");
+  assert.match(selfCheck("selfCheck/windows.ts"), /\["self-check-close-settings", "settings"\], \["self-check-close-import", "import"\]/);
+  assert.match(selfCheck("selfCheck/windows.ts"), /await windows\(\)\.requestClose\(id\);\n\s+const took = await goneWithin\(id, CLOSED_BY_REQUEST_MS\);/);
+  assert.match(selfCheck("selfCheck/enginePopups.ts"), /expectTrue\(await popupWindowsGone\(popupsBefore, POPUP_WINDOW_GONE_MS\),/);
+  assert.doesNotMatch(selfCheck("selfCheck/enginePopups.ts"), /^import \{[^}]*\} from "@ardia\/shell";/m, "a runtime import of @ardia/shell from the self-checks loads its view managers before viewNamed is ready");
+  assert.match(selfCheck("selfCheck/enginePopups.ts"), /import \{ isPopupWindowId \} from "@ardia\/shell\/src\/windows\.ts";/);
+  assert.match(selfCheck("index.ts"), /void runSelfCheck\(\)\.finally\(\(\) => void endByClosingTheLastWindow\(\)\);/);
+  const last = selfCheck("selfCheck/lastWindow.ts");
+  assert.match(last, /for \(const id of await windows\(\)\.windowIds\(\)\) if \(id !== LAST_WINDOW_ID\) await windows\(\)\.closeWindow\(id\);/);
+  assert.match(last, /await windows\(\)\.requestClose\(LAST_WINDOW_ID\);/);
+  assert.match(last, /console\.error\(`\[ardia windows\] self-check: the app was still running/);
 });

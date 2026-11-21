@@ -28,10 +28,11 @@ export type KeyPressResult = {
   error?: string;
 };
 export type Click = { x: number; y: number; in?: "window" | "page"; label?: string; queued?: boolean; asKey?: boolean; wait?: number };
-export type ClickResult = { hit?: string; at?: number; firstResponder?: string; firstResponderOnClick?: string; firstResponderAfter?: string; error?: string };
+export type ClickResult = { hit?: string; root?: [number, number]; at?: number; firstResponder?: string; firstResponderOnClick?: string; firstResponderAfter?: string; error?: string };
 
 export type DevNative = {
   devCrash(kind?: "exception"): Promise<void>;
+  devBlockMain(ms: number): Promise<number>;
   devRenderIntroMusic(cues: IntroMusicCues, path: string): Promise<number | null>;
   devRunAppleScript(source: string): Promise<{ ok: boolean; result?: unknown; error?: string; number?: number }>;
   devSnapshotWindow(windowId: string, path: string, transparent?: boolean): Promise<boolean>;

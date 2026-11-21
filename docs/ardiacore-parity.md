@@ -134,6 +134,7 @@ Moved to `docs/testing.md` › "ArdiaCore acceptance".
 | passwords, passwords-more | Chrome's password store: save, list, reveal, edit, delete, never-save list, unlock (test reauth), export through the save panel, the autofill pref |
 | autofill, autofill-cards | Addresses; cards saved with a published test number, listed, revealed, deleted; the address and card switches |
 | zoom-levels | `setZoom`/`getZoomLevels` on Chrome's host zoom map |
+| preload-pages | `setPreloadPages`/`getPreloadPages` write and read back Chrome's preload pages state |
 | extensions, extension-surfaces | Unpacked inspect, install, list, disable, uninstall, reload; action state and side panel URL for a tab; the extension's declarativeNetRequest blocks counted on the page (`onContentBlocked`) |
 | chrome-windows-create | `chrome.windows.create` from an extension → the tab lands in the app's window as a live tab (`tab:<id>`), also on a fresh instance showing only the New Tab page (through the extensions module's `onTabs` with an `adoptId`) |
 | extension-popup-window | An action's popup (`extensionHost="popup"`) sees the window it was clicked in as its current window and the page under it as its active tab; it's in no strip and makes no window; Esc in it closes it |
@@ -156,6 +157,7 @@ Moved to `docs/testing.md` › "ArdiaCore acceptance".
 | frozen | `setFrozen(true/false)` on a background page: the page sees freeze and resume |
 | discard | A background tab discarded in place → `onDiscarded` |
 | permission-prompt, popup-blocked | A permission request → the app's prompt → Chrome; a popup without a gesture → `onPopupBlocked` → `openBlockedPopup` |
+| popup-window-full-screen | A sized `window.open` popup and an extension's `chrome.windows.create` popup (a `TYPE_APP_POPUP` Chrome makes its own window for) opened from a full-screen window can join that window's Space (`NSWindowCollectionBehaviorFullScreenAuxiliary`), so macOS doesn't show them on another desktop; from a window that isn't full screen a popup keeps its own full screen |
 | camera-mic-allow | 0.2.21's crash case, on the media copy (above): a camera + microphone getUserMedia is one prompt; Allow starts the stream with both tracks live |
 | permission-answer-once | A double Allow and two more answers straight to the engine decide nothing twice; a late answer to that prompt doesn't answer the tab's next one |
 | permission-element-allow | The `<usermedia>` element (0.2.21's crash path): with macOS "not asked yet" (`--ardia-test-system-media-permission=ask`), one prompt, one Allow, Chrome's "ask macOS" step handled in the engine, no second prompt, the element's stream live |
@@ -262,9 +264,10 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `onPermission`, `resolvePermission` | done | One answer per prompt (`ac_permissions.mm`): a page's permission element (Chrome's embedded flow) reaches the app only for its site question; the steps after Allow ("ask macOS", "open System Settings", policy) stay in the engine, as Chrome's own view does, and a later step is never a question even if the site's setting was reset meanwhile. 0.2.21 answered those steps with a second Accept and aborted (`camera-mic-allow`, `permission-answer-once`, `permission-element-allow`) |
 | `getExternalAppAllowances`, `removeExternalAppAllowance` | done | |
 | `clearBrowsingData`, `deleteProfileData` | done | A profile never loaded this session is its folder alone |
-| `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin Lite as a component extension (`loadComponentExtension:`), driven through its runtime messages |
+| `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `addFilterList`, `removeFilterList`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin as a component extension (`loadComponentExtension:`), driven through its runtime messages; `addFilterList`/`removeFilterList` import and drop custom lists by URL (`applyFilterListSelection` `toImport`/`toRemove`), and other profiles follow them |
 | `setSiteSetting`, `getSiteSettings`, `getSiteSettingsOrigins`, `resetSiteSettings`, `clearSiteData` | done | Chrome's content settings under CEF's type names; the page script's `blockAutoplay` comes from them as on CEF |
 | `setZoom`, `getZoomLevels` | done | |
+| `setPreloadPages`, `getPreloadPages` | done | Chrome's preload pages state per profile (`prefetch::SetPreloadPagesState`, standard or none); off by default. A prerendered page's posts on the page channel are held until activation (`ac_prerender_posts.h`), so Chrome doesn't cancel the prerender with `kMojoBinderPolicy` |
 | `listPasswords`, `unlockPasswords`, `getPassword`, `savePassword`, `updatePassword`, `deletePassword`, `getNeverSavePasswordOrigins`, `allowSavingPasswords`, `exportPasswords`, `getPasswordAutofill`, `setPasswordAutofill` | done | |
 | `getAutofillSettings`, `setAutofillSettings`, `listAddresses`, `saveAddress`, `listCards`, `saveCard`, `deleteAutofillEntry`, `revealCardNumber` | done | |
 | `resolveExternalApp` | partial | The prompt is proven; opening the app is not (it would launch one) |

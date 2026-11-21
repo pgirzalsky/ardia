@@ -10,7 +10,6 @@ import {
   finishOnboarding,
   forgetOnboardingProgress,
   goToStep,
-  customizeMore,
   nextStep,
   presetPatch,
   previewLive,
@@ -22,6 +21,7 @@ import {
   useOnboarding,
 } from "./onboarding";
 import { pinSites } from "./sites";
+import * as pluginsStep from "./pluginsStep";
 
 export const onboardingTestRun = () => devTestValue("onboarding") === "1";
 
@@ -47,9 +47,9 @@ if (__DEV__)
     finish: finishOnboarding,
     redo: redoOnboarding,
     cancel: cancelOnboarding,
-    customizeMore,
     previewLive,
     pinSites,
+    pluginsStep,
     resolveDraft,
     questionsFor,
     PRESETS,

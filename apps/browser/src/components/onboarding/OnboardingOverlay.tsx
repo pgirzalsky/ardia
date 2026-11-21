@@ -7,10 +7,11 @@ import { useWindowId } from "../../state/browser/hooks";
 import { Intro } from "./Intro";
 import { dismissOnboarding, goToStep, useOnboarding } from "../../state/onboarding/onboarding";
 import { LayoutStep, TabsStep } from "./LayoutSteps";
-import { DetailsStep, LookStep } from "./LookStep";
+import { LookStep } from "./LookStep";
 import { SearchPrivacyStep } from "./PrivacyStep";
 import { SourceStep } from "./SourceStep";
 import { HomeStep } from "./HomeStep";
+import { OnboardingConsentSheet, PluginsStep } from "./PluginsStep";
 import { OutroStep } from "./OutroStep";
 import { PinnedTabsStep } from "./PinnedTabsStep";
 import { SetupCodeOutro } from "./SetupCodeOutro";
@@ -94,10 +95,10 @@ function Overlay({ session }: { session: number }) {
                   {step === "layout" && <LayoutStep />}
                   {step === "tabs" && <TabsStep />}
                   {step === "look" && <LookStep />}
-                  {step === "details" && <DetailsStep />}
                   {step === "searchPrivacy" && <SearchPrivacyStep />}
                   {step === "pins" && <PinnedTabsStep />}
                   {step === "home" && <HomeStep />}
+                  {step === "plugins" && <PluginsStep />}
                   {step === "outro" && (isWebDemo ? <SetupCodeOutro /> : <OutroStep />)}
                 </View>
               </OnboardingCardContext.Provider>
@@ -107,6 +108,7 @@ function Overlay({ session }: { session: number }) {
         </View>
       )}
       {step === "intro" && <Intro onDone={() => goToStep("source")} />}
+      <OnboardingConsentSheet />
     </Animated.View>
   );
 }

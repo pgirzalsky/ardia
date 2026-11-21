@@ -31,7 +31,10 @@ the start unless noted. All clocks are epoch ms on the same Mac: JS's `Date.now(
 
 | Journey | Step | From → to |
 |---|---|---|
-| J1 launch (`perf_launch`, one per launch) | `engine_ms` | process start → Chrome's engine is up (`engineDidStart`; from 0.2.46-nightly.7) |
+| J1 launch (`perf_launch`, one per launch) | `main_ms` | process start → the first statement of `main.swift` (`ArdiaHost.markMainStarted`, before `LaunchConfig` and the legacy-folder migration; from the first nightly after 0.2.46-nightly.7). Time before `main`: the OS loading and checking the app |
+| | `startup_ms` | → `PrepareStartup` has returned in `runWithArgc` (the data directory and its first-run work; from the same nightly). `startup_ms - main_ms` is our code between `main` and the engine run |
+| | `chromium_ms` | → just before Chromium's own run starts (`ArdiaCoreEngine runWithArgc:`; from the same nightly). `chromium_ms - startup_ms` is the rest of our setup |
+| | `engine_ms` | → Chrome's engine is up (`engineDidStart`; from 0.2.46-nightly.7). `engine_ms - chromium_ms` is Chromium starting: its profile and its browser process |
 | | `early_window_ms` | → the early window ordered on screen (`TryEarlyWindow`; null when the launch didn't show one; from 0.2.46-nightly.7) |
 | | `rn_ms` | → React Native starts loading the bundle (`launchApp`, after the early window and its first commit; from 0.2.46-nightly.7). `js_ms - rn_ms` is the bundle load, `rn_ms - engine_ms` the early window |
 | | `js_ms` | → the bundle's first module runs (`state/telemetry/jsStart.ts`) |
@@ -59,7 +62,19 @@ the start unless noted. All clocks are epoch ms on the same Mac: JS's `Date.now(
 Each `perf_journeys` step goes as `<step>_p50`, `_p75`, `_p95`, `_max` and `_n` (ms; at most 500 samples per step per
 summary). Counts: `j3_cold` (the page was hidden), `j3_warm` (it was still painting), `j3_load` (it had to load),
 `j3_other` (no page: New Tab), `j2_no_bar`, `j4_no_load` (not a page load: a ardia: page, a download),
-`j4_no_paint` (nothing painted within 30 s), `j4_replaced` (another navigation came first).
+`j4_no_paint` (nothing painted within 30 s), `j4_replaced` (another navigation came first), `j3_native` (a sidebar
+press showed the page from native code before JS switched), `j3_native_dropped` (of those, shown and then not
+selected: a drag, a press on the shown tab's row, a press JS never heard, the tab closed, crashed or put to sleep
+while shown, a split made around it, the app or the window left, another selection winning, the 5 s backstop; a page a
+later press replaced is not counted, its own switch still follows). Both count only pages whose pixels reached the
+screen: one cancelled while it waited for its first frame is neither. Watch `j3_native_dropped / j3_native` stay small
+and `j3_view`'s p95 fall. A switch native code showed first is timed from its own press (the `nativePress` mark, kept
+under that press's number, so no other switch to the same tab can use it and a press taken back takes it along), not
+from the last input, so a release that came before JS heard the press, or a stall longer than a second, still gives
+a `j3` sample. Until JS commits the switch the page shown is pixels only: keys and clicks at the page reach neither
+page, and the keyboard stays where it was.
+A page of this Space that is kept warm keeps both this and JS's own reveal off (`revealableOver`); another Space's
+warm page does only while it is awake (the 10 s after a Space switch or swipe).
 Context: `tabs`, how many tabs were open when the summary went out (an exact count, from the first nightly after 0.2.46-nightly.6), so J2 and J3 can
 be split by tab count: they must not grow with it (#1330). Before it, join `perf_memory`'s tab count by copy.
 `perf_journeys` goes hourly and at quit, like `perf_omnibox`; `perf_launch` once its steps are in (≤ 30 s after the first
@@ -67,14 +82,23 @@ window, or at quit), not at the first window as before.
 
 `perf_launch` context: `tabs` (the restored tabs, an exact count since 0.2.42; before, ranges 0, 1, 2-5, 6-20, 21-50,
 51-100, 101-200, 200+, which a numeric query reads as 0), `windows`
-(1…10), `history` (0, <100, <1k, <5k, <20k, 20k+ entries), `cold` (the first launch since the Mac started, by
+(1…10), `history` (0, <100, <1k, <5k, <20k, 20k+ entries; from the fix for #766: <20k, <100k, 100k+), `history_oldest` (from
+the fix for #766: the oldest listed page's last visit, <30d, <91d, <1y, <3y, 3y+, null with no history), `cold` (the first launch since the Mac started, by
 `kern.boottime` against this copy's last launch; null until a second launch with sharing on), `first_of_version` (the
 first launch after the app's version or build changed, or the first this copy recorded: macOS's Gatekeeper scans the new
 bundle before `main`, so these launches are slower; a copy from before this field compares versions only),
 `update_prewarm` (on a first launch of a version: `done` when the previous copy ran this build hidden before installing it,
 `failed` when that run was stopped, didn't finish, failed to start, or was refused because the staged copy isn't signed like the running app, `none` when nothing ran; null otherwise) and `update_prewarm_ago` (how long
 before this launch that run ended, in `since_quit`'s ranges), `since_quit` (<1m, <10m,
-<1h, <8h, <1d, <7d, 7d+, `unclean` when the last session didn't end, `unknown`), `since_boot` (<2m, <10m, <1h, <1d, 1d+).
+<1h, <8h, <1d, <7d, 7d+, `unclean` when the last session didn't end, `unknown`), `since_boot` (<2m, <10m, <1h, <1d, 1d+),
+`load_1m` (the Mac's 1-minute load average from `getloadavg` when the app read it, rounded to 2 decimals, so a busy Mac
+can be told from a slow launch on a quiet one; null when the call failed, never 0) and `launched_hidden` (true when the
+launch was hidden, started as a login item, false when it wasn't; null when AppKit hadn't finished launching when the
+value was read). Both, and `main_ms`, `startup_ms` and `chromium_ms`, come from the first nightly after
+0.2.46-nightly.7; an earlier build leaves them out, and a mark the app didn't reach is null, never 0.
+`launch_source` (`login_item`, `documents` when another app opened a link or file with Ardia, `user`; null before AppKit
+finished launching, nothing else ever sent), `appkit_will_finish_ms` and `appkit_did_finish_ms` (`NSApplicationWillFinishLaunching`
+and `NSApplicationDidFinishLaunching`, from process start) come from the first nightly after 0.2.47-nightly.4.
 
 ### A session's payload
 

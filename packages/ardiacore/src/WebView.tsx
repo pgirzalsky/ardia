@@ -5,13 +5,23 @@ import { findNodeHandle, type NativeSyntheticEvent } from "react-native";
 import type { FaviconImage } from "./favicons";
 import { ArdiaError, ardiaError } from "@ardia/core";
 import { deliverPageEvent, isPageEventProp, pageEventOf, type NativeProps, type PageEvent } from "./pageEvents";
-import type { DiscardOutcome, WebViewHandle, WebViewProps } from "./pageTypes";
+import type { DiscardOutcome, DiscardRefusal, WebViewHandle, WebViewProps } from "./pageTypes";
 import type { PageCookie } from "./webkit";
 
 type NativeHandle = Omit<
   WebViewHandle,
-  "evaluate" | "loadUrl" | "downloadFavicon" | "resolvePasswordPrompt" | "discard" | "nativeTag" | "requestPictureInPicture" | "takeControlPress"
+  | "evaluate"
+  | "loadUrl"
+  | "downloadFavicon"
+  | "resolvePasswordPrompt"
+  | "answerAutofillPrompt"
+  | "discard"
+  | "sleepIfHidden"
+  | "nativeTag"
+  | "requestPictureInPicture"
+  | "takeControlPress"
 > & {
+  answerAutofillPrompt(id: number, answer: string): Promise<boolean>;
   requestPictureInPicture(clickAt: number, control: number): Promise<boolean>;
   takeControlPress(clickAt: number, control: number): Promise<boolean>;
   evaluate(code: string): Promise<string | null>;
@@ -19,6 +29,7 @@ type NativeHandle = Omit<
   loadUrl(url: string, userInitiated?: boolean): Promise<void>;
   resolvePasswordPrompt(answer: string, username: string | null, password: string | null): Promise<void>;
   discard(unload: boolean): Promise<DiscardOutcome>;
+  sleepIfHidden(seconds: number): Promise<DiscardRefusal[]>;
 };
 
 const NativeWebView = requireNativeViewManager<NativeProps>("ArdiaWebView");
@@ -26,6 +37,7 @@ let NativeWebKitView: typeof NativeWebView | undefined;
 const webKitView = () => (NativeWebKitView ??= requireNativeViewManager<NativeProps>("ArdiaWebKit"));
 
 const VIEW_RETRIES = 3;
+const NO_PAGE_TO_DISCARD: DiscardRefusal = -1;
 const isViewMissing = (error: unknown) =>
   (error as { code?: unknown } | null)?.code === "ERR_ARGUMENT_CAST" &&
   /Unable to find the '\w+' view with tag/.test(String((error as { message?: unknown }).message));
@@ -53,10 +65,12 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       goBack: () => call(undefined, (n) => n.goBack()),
       goForward: () => call(undefined, (n) => n.goForward()),
       goToOffset: (offset) => call(undefined, (n) => n.goToOffset(offset)),
+      isAttached: () => native.current !== null,
       reload: () => call(undefined, (n) => n.reload()),
       forceReload: () => call(undefined, (n) => n.forceReload()),
       stopLoading: () => call(undefined, (n) => n.stopLoading()),
       focus: () => call(undefined, (n) => n.focus()),
+      focusIfUnfocused: () => call(false, (n) => n.focusIfUnfocused()),
       setMuted: (muted) => call(undefined, (n) => n.setMuted(muted)),
       zoomStep: (direction) => call(undefined, (n) => n.zoomStep(direction)),
       find: (text, forward, findNext) => call(undefined, (n) => n.find(text, forward, findNext)),
@@ -89,12 +103,14 @@ export const WebView = forwardRef<WebViewHandle, WebViewProps>(function WebView(
       resolvePasswordPrompt: (answer, edits) =>
         call(undefined, (n) => n.resolvePasswordPrompt(answer, edits?.username ?? null, edits?.password ?? null)),
       resolveAutofillPrompt: (id, answer) => call(undefined, (n) => n.resolveAutofillPrompt(id, answer)),
+      answerAutofillPrompt: (id, answer) => call(false, (n) => n.answerAutofillPrompt(id, answer)),
       executeExtensionAction: (extensionId) => call(null, (n) => n.executeExtensionAction(extensionId)),
       resolveDisplayMedia: (id, sourceId, audio = false) => call(undefined, (n) => n.resolveDisplayMedia(id, sourceId, audio)),
       mediaCaptureSourceId: () => call(null, (n) => n.mediaCaptureSourceId()),
       notificationAction: (id, action) => call(undefined, (n) => n.notificationAction(id, action)),
       resolveUnresponsive: (terminate) => call(undefined, (n) => n.resolveUnresponsive(terminate)),
       discard: (options) => call<DiscardOutcome>("refused", (n) => n.discard(options?.unload ?? false)),
+      sleepIfHidden: (seconds) => call<DiscardRefusal[]>([NO_PAGE_TO_DISCARD], (n) => n.sleepIfHidden(seconds)),
       setFrozen: (frozen) => call(undefined, (n) => n.setFrozen(frozen)),
     };
   });

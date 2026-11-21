@@ -5,10 +5,11 @@ import { layout, useTheme } from "../ui/theme";
 import { useSettings } from "../../state/browser/hooks";
 import { isIncognitoProfile } from "../../state/browser/model";
 import { newCapture } from "../../state/sidebar/listCapture";
-import { useCanTidyPins, useCapturedSidebarEntries, usePinnedCollapsed, usePinnedKept } from "../../state/sidebar/hooks";
+import { useCapturedSidebarEntries, useOffersTidyTabs, usePinnedCollapsed, usePinnedKept } from "../../state/sidebar/hooks";
 import { useAddressBarInSidebar } from "../../state/windows/layout";
+import { useNewTabAtTop } from "../../state/sidebar/chrome";
 import { ClearDivider } from "./ClearDivider";
-import { useDragController, useDragItem } from "./DragProvider";
+import { DragScope, useDragController, useDragItem } from "./DragProvider";
 import { Fold, useFold } from "./Fold";
 import { SidebarEntry } from "./GroupBlock";
 import { GhostSlot, ListMotionContext, useListMotion } from "./ListMotion";
@@ -17,11 +18,12 @@ import { usePinnedSequence } from "../../state/sidebar/pinnedOrder";
 import { SCROLL_EDGE } from "./ScrollEdge";
 import { entryHeightNow, firstPaintEntriesNow, usePendingEntriesHeight } from "../../state/sidebar/geometry";
 import { INCOGNITO_ICON } from "../ntp/IncognitoHeading";
-import { ROW_PITCH, ROWS_PER_FRAME, type SidebarGeometry } from "./pageLayout";
+import { rowPitch, ROWS_PER_FRAME, type SidebarGeometry } from "./pageLayout";
 import { NewTabRow } from "./NewTabRow";
 import { CleanUpUpsell } from "./CleanUpUpsell";
 import { sidebarTokens, TAB_ROW } from "./tokens";
 import { tailKey } from "./dragModel";
+import type { ListViewport } from "./listViewport";
 
 type PageRowsProps = {
   windowId: string;
@@ -37,12 +39,12 @@ type PageRowsProps = {
   controller: ReturnType<typeof useDragController>;
   geometry: RefObject<SidebarGeometry> | undefined;
   regions: SidebarGeometry["regions"];
-  onListHeight: (height: number) => void;
+  viewport: ListViewport | null;
 };
 
 const DOCKED_TILES_GAP = SCROLL_EDGE.gap + SCROLL_EDGE.line + SCROLL_EDGE.inset;
 
-export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, onListHeight }: PageRowsProps) {
+export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, tiles, underDockedTiles, innerWidth, inlineNewTab, controller, geometry, regions, viewport }: PageRowsProps) {
   const [captured] = useState(newCapture);
   const { list: all } = useCapturedSidebarEntries(windowId, profileId, captured);
   const [mountedRows, setMountedRows] = useState(() => firstPaintEntriesNow(windowId, profileId, all, lazy));
@@ -60,7 +62,8 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const pending = usePendingEntriesHeight(windowId, profileId, all, mountedRows, growing);
   const showClear = useSettings((s) => s.showClearButton);
   const clearable = showClear && !offScreen && all.length > 0;
-  const tidy = useCanTidyPins(windowId, profileId, offScreen);
+  const tidyTabs = useSettings((s) => s.tidyTabs);
+  const tidy = useOffersTidyTabs(windowId, profileId, offScreen || !tidyTabs);
   const pinned = usePinnedSequence(windowId, profileId, offScreen);
   const pinnedSection = pinned.length > 0;
   const divided = clearable || tidy || pinnedSection;
@@ -68,18 +71,20 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
   const pinnedFold = useFold(collapsed);
   const kept = usePinnedKept(windowId, profileId, pinned);
   const pinnedGap = collapsed && !kept && !pinnedFold.moving ? 0 : layout.rowGap;
-  const newTabButtonAtTop = useSettings((s) => s.newTabButtonPosition === "top");
+  const newTabButtonAtTop = useNewTabAtTop();
   const animated = current && !offScreen;
-  const motion = useListMotion(windowId, profileId, all, captured, animated);
-  const scope = useMemo(() => ({ enabled: animated, slideBelow: motion.slideBelow }), [animated, motion.slideBelow]);
+  const motion = useListMotion(windowId, profileId, all, captured, animated, viewport, newTabButtonAtTop && inlineNewTab ? rowPitch() : 0);
+  const scope = useMemo(() => ({ slideBelow: motion.slideBelow }), [motion.slideBelow]);
   if (geometry) geometry.current.newTabAtTop = newTabButtonAtTop && inlineNewTab;
   return (
     <ListMotionContext.Provider value={scope}>
-      <View
-        onLayout={(e) => onListHeight(e.nativeEvent.layout.height + SCROLL_EDGE.inset - (inlineNewTab ? ROW_PITCH : 0))}
-      >
+      <View>
         {isIncognitoProfile(profileId) ? <IncognitoBadge /> : null}
-        {tiles.length ? <PinnedGrid tabs={tiles} innerWidth={innerWidth} flush /> : null}
+        {tiles.length ? (
+          <DragScope enabled={current}>
+            <PinnedGrid tabs={tiles} innerWidth={innerWidth} flush />
+          </DragScope>
+        ) : null}
         <View
           ref={(v) => {
             controller?.regions.set("pinnedGroups", v);
@@ -113,6 +118,7 @@ export function PageRows({ windowId, profileId, current, rows, lazy, offScreen, 
             controller?.regions.set("list", v);
           }}
           onLayout={(e) => void (regions.list = e.nativeEvent.layout.y)}
+          removeClippedSubviews
           style={{ gap: layout.rowGap }}
         >
           {newTabButtonAtTop && inlineNewTab ? <NewTabRow windowId={windowId} /> : null}
