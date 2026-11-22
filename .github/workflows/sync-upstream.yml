@@ -55,7 +55,7 @@ jobs:
             echo "main fast-forwarded to $short"
           else
             git checkout -q -B sync-main origin/main
-            git merge --no-edit -m "Merge upstream $short into main" "$sha" \
+            git merge -X theirs --no-edit -m "Merge upstream $short into main" "$sha" \
               || { git merge --abort; echo "::error::main cannot take $short cleanly"; exit 1; }
             git push origin sync-main:refs/heads/main
             echo "main merged with $short"
