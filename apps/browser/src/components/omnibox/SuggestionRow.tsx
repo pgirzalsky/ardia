@@ -1,22 +1,18 @@
 import { displayHost, displayUrl, hostOf, type Suggestion } from "@ardia/core";
 import { memo, type ReactNode } from "react";
-import { isLoose, onLayoutMode } from "../../lib/layoutMode";
 import { Image, Pressable, Text as NativeText, View } from "react-native";
-import { Button, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
+import { Button, perLook, Symbol, Text, useHover, useTheme, withAlpha, type Theme } from "../ui";
+import { isLoose } from "../../lib/layoutMode";
 import { Favicon } from "../favicon/Favicon";
 import { SELECTED_SUGGESTION_ALPHA, SUGGESTION } from "./tokens";
 
-const ICON_BOX = { width: SUGGESTION.iconBox, height: SUGGESTION.iconBox };
-onLayoutMode(() => {
-  ICON_BOX.width = SUGGESTION.iconBox;
-  ICON_BOX.height = SUGGESTION.iconBox;
-});
+const iconBox = perLook(() => ({ width: SUGGESTION.iconBox, height: SUGGESTION.iconBox }));
 
 function IconPlate({ children }: { children: ReactNode }) {
   const theme = useTheme();
   if (!isLoose()) return <>{children}</>;
   return (
-    <View style={{ ...ICON_BOX, borderRadius: SUGGESTION.plateRadius, alignItems: "center", justifyContent: "center", backgroundColor: theme.dark ? SUGGESTION.plateFill.dark : SUGGESTION.plateFill.light }}>
+    <View style={{ ...iconBox(), borderRadius: SUGGESTION.plateRadius, alignItems: "center", justifyContent: "center", backgroundColor: theme.dark ? SUGGESTION.plateFill.dark : SUGGESTION.plateFill.light }}>
       {children}
     </View>
   );
@@ -34,16 +30,16 @@ export function SuggestionIcon({ suggestion: s, color }: { suggestion: Suggestio
     case "create":
       return <Favicon url={`https://${s.site}`} size={SUGGESTION.favicon} />;
     case "search":
-      return <Symbol name="magnifyingglass" size={SUGGESTION.icon} color={tint} style={ICON_BOX} />;
+      return <Symbol name="magnifyingglass" size={SUGGESTION.icon} color={tint} style={iconBox()} />;
     case "calc":
-      return <Symbol name="equal.circle" size={SUGGESTION.calcIcon} color={tint} style={ICON_BOX} />;
+      return <Symbol name="equal.circle" size={SUGGESTION.calcIcon} color={tint} style={iconBox()} />;
     case "action":
-      return <Symbol name={s.icon ?? "command"} size={SUGGESTION.icon} color={tint} style={ICON_BOX} />;
+      return <Symbol name={s.icon ?? "command"} size={SUGGESTION.icon} color={tint} style={iconBox()} />;
     case "extension":
       return s.icon ? (
-        <Image source={{ uri: s.icon }} style={ICON_BOX} />
+        <Image source={{ uri: s.icon }} style={iconBox()} />
       ) : (
-        <Symbol name="puzzlepiece.extension" size={SUGGESTION.icon} color={tint} style={ICON_BOX} />
+        <Symbol name="puzzlepiece.extension" size={SUGGESTION.icon} color={tint} style={iconBox()} />
       );
     case "provider":
       return <Favicon url={s.url} favicon={s.icon} size={SUGGESTION.favicon} />;
@@ -149,7 +145,7 @@ const SuggestionRow = memo(
             <IconPlate>
               <SuggestionIcon suggestion={s} />
             </IconPlate>
-            <Text lines={1} size="title" style={{ flexShrink: 1 }}>
+            <Text lines={1} size="title" ardiaCentersCapitals style={{ flexShrink: 1 }}>
               {title}
               {accessory ? (
                 <NativeText style={{ color: theme.textSecondary }}>
@@ -159,7 +155,7 @@ const SuggestionRow = memo(
               ) : null}
             </Text>
             <View style={{ flex: 1 }} />
-            {hint && !removable ? <Text size="small" tone="textTertiary">{hint}</Text> : null}
+            {hint && !removable ? <Text size="small" tone="textTertiary" ardiaCentersCapitals>{hint}</Text> : null}
             {removable ? (
               <Button variant="icon" icon="xmark" size="s" color={theme.textSecondary} tooltip="Remove from History" onPress={onRemove} />
             ) : null}

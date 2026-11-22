@@ -1,24 +1,12 @@
-import { create } from "zustand";
+import { activeLook } from "./activeLook";
 
-export type LayoutMode = "default" | "loose";
+export const isLoose = (): boolean => activeLook().loose;
+export const pick = <T,>(standard: T, loose: T): T => (isLoose() ? loose : standard);
 
-let mode: LayoutMode = "default";
-const listeners = new Set<(mode: LayoutMode) => void>();
-
-export const useLayoutEpoch = create<{ epoch: number }>()(() => ({ epoch: 0 }));
-
-export const layoutMode = () => mode;
-export const isLoose = () => mode === "loose";
-export const pick = <T,>(standard: T, loose: T, m: LayoutMode = mode): T => (m === "loose" ? loose : standard);
-
-export function onLayoutMode(apply: (mode: LayoutMode) => void) {
-  apply(mode);
-  listeners.add(apply);
-}
-
-export function setLayoutMode(next: LayoutMode) {
-  if (next === mode) return;
-  mode = next;
-  listeners.forEach((apply) => apply(next));
-  useLayoutEpoch.setState((s) => ({ epoch: s.epoch + 1 }));
+export function byLayout<T extends object>(standard: T, loose: Partial<T>): T {
+  const out = {} as T;
+  for (const key of Object.keys(standard) as (keyof T)[]) {
+    Object.defineProperty(out, key, { enumerable: true, get: () => (isLoose() && key in loose ? loose[key] : standard[key]) });
+  }
+  return out;
 }

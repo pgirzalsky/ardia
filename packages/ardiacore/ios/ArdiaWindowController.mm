@@ -36,8 +36,8 @@ void HandOffTab(ArdiaCoreTab *tab) {
   if (!profile) return (void)dispatch_async(dispatch_get_main_queue(), ^{ [tab closeNow]; });
   ArdiaWebView *view = [ArdiaWindowController hostingViewForProfile:profile];
   if (view || !profile.offTheRecord) {
-    if (view && ([view.profile isEqualToString:ardia_host::ProfileName(profile)] ||
-                 ardia_host::IsOffTheRecordOf(profile, view.profile)))
+    if (view && (view.visible || ![ArdiaEvents listens:@"extensions"]) &&
+        ([view.profile isEqualToString:ardia_host::ProfileName(profile)] || ardia_host::IsOffTheRecordOf(profile, view.profile)))
       [view openedTab:tab adoptId:[ArdiaTabRegistry offerTab:tab prefix:@"tab"] disposition:@"foreground"];
     else
       AnnounceStrayTab(tab, 0);
@@ -369,6 +369,10 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 }
 
 - (BOOL)window:(ArdiaCoreWindow *)window preHandleKeyEvent:(NSEvent *)event {
+  if (KeepsReservedKeyInDevTools(window.window, event)) {
+    if (event.type == NSEventTypeKeyDown && !event.isARepeat) [ArdiaEvents emit:@"engine.devToolsKeyKept" data:[[ArdiaConsentStamp begin] onto:@{}]];
+    return NO;
+  }
   return ArdiaPerformReservedKey(event);
 }
 

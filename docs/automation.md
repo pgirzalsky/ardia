@@ -31,8 +31,9 @@ Issue #717. Config files and themes are `docs/config.md`; page scripting over CD
 
 At most 16 connections (more are closed at accept). Per connection: one input line at most 1,048,576 bytes before its
 newline, an incomplete line closes the connection after 30 s, at most 32 requests waiting for a reply, at most 4 MB of
-output buffered. Events beyond 1,000 waiting on one connection drop the oldest waiting events (never a reply, never a
-partly written line); the next event written carries a top-level `"dropped": N` with the count since the last one.
+output buffered. Events beyond 1,000 waiting on one connection, or beyond what fits in the 4 MB, drop the oldest
+waiting events (never a reply, never a partly written line; an event larger than the whole budget is dropped
+itself); the next event written carries a top-level `"dropped": N` with the count since the last one.
 Going over any other limit closes only that connection. Each event is serialized at most twice (with and without
 full URLs) and the bytes are fanned out. Decide requests ride the event path, so a flooded runner can lose one; the
 app then uses its default at the deadline. At most 64 decisions wait at once (16 per connection); past that the
@@ -42,8 +43,9 @@ default applies at once.
 
 Newline-delimited JSON, UTF-8, one object per line, `\n` terminated.
 
-- Requests: `{"id": 1, "method": "…", "params": {…}}`. `id` is a safe integer or a string, echoed in the reply;
-  `params` is optional.
+- Requests: `{"id": 1, "method": "…", "params": {…}}`. `id` is a safe integer or a well-formed string (no lone surrogate) of at most 256 UTF-8
+  bytes, echoed in the reply; any other id is refused with `bad_request` and `"id": null`, so no reply grows past the line limit
+  because of its id. `params` is optional.
 - Replies: `{"id": 1, "result": …}` or `{"id": 1, "error": {"code": "…", "message": "…"}}`. A line that isn't a JSON
   object, or has no usable `id`, gets an error with `"id": null` and the connection stays open.
 - Events: `{"event": "tab.opened", "time": 1730400000000, "data": {…}}`, in the order the store changed. Subscribing
@@ -72,15 +74,20 @@ bookmark searches) and their fixed page title.
 
 ### Methods
 
-- `hello` `{"caller"?: {"name", "app"?}}` → `{"app": "Ardia", "version": "0.2.44", "protocol": 3}`. Protocol 2 added
+- `hello` `{"caller"?: {"name", "app"?}}` → `{"app": "Ardia", "version": "0.2.44", "protocol": 4}`. Protocol 2 added
   `subscribe`'s options, `run`'s `tab`, `answer` and decide requests; protocol 3 added `workspace` and `apply`
-  (Tabs and groups, below); older clients keep working. `caller` names
+  (Tabs and groups, below); protocol 4 added the plugin methods (`plugins`, `plugins.enable`, `plugins.disable`,
+  `plugins.remove`, `plugins.call`, `docs/plugins.md`); older clients keep working. `caller` names
   who runs the client for the pill (The pill), display only.
 - `caller` → `{"ok": true}` puts the connection's `hello` caller on the pill now (`ok` is false without one). The
   `browse` daemon and `scripts test` call it, since their CDP connections carry no name.
 - `commands` → `[{"id", "title", "scope", "variants": [ids] | null}]`: the automatable commands. `title` is the menu
   title (else the command bar's, else the id), `scope` is `"page"`, `"window"` or `null`.
 - `run` `{"command", "arg"?, "window"?, "tab"?}` → `{"ok": true}` once the command was dispatched (not necessarily finished).
+  In a background instance `run` answers `refused` for every command ("run isn't available in background instances;
+  use the dedicated methods"), since a menu command can open UI or start a page load nobody can answer; a visible
+  instance runs it, and a question it asks shows in its window while the reply still comes at dispatch, as for a
+  click on the menu.
   `command` is a catalog id, `arg` one of its variant ids. It runs through `runCommand`, exactly as the menu or a
   shortcut would. `window` must be an eligible window id, else `no_window` (no fallback to another window); without
   it, the last focused eligible window (windows never focused come after, in window order); with no browser window
@@ -106,6 +113,11 @@ bookmark searches) and their fixed page title.
   approved revision never runs an edited program.
 - `answer` `{"decide", "answer"}`: see Protocol.
 - `workspace` `{"window"?, "profile"?, "usage"?}` and `apply` `{"ops": [...]}`: see Tabs and groups.
+- `offscreen` `{"tab"}` → `{"ok": true}`: takes a tab the ardia command opened, and that was never shown, out of
+  its window and the sidebar into Ardia's automation window for that profile, where `ardia browse set viewport` may
+  size its page (`docs/cli.md` › Gated by the token policy). `refused` for the shown tab, one the command didn't
+  open, one that has been shown, or a page Ardia couldn't move; `no_window` for an unknown or private tab. The tab
+  never comes back: the command opens a new one to show the page.
 
 ### Tabs and groups
 
@@ -121,8 +133,8 @@ drag or a menu pick. Code: `state/automation/workspace*.ts`.
 `"shown": true`: `{"profile", "profileName", "shown", "activeTab", "topApps", "pinned", "tabs"}`, each list in sidebar
 order. `topApps` holds tiles and tile folders (`{"type": "folder", "id", "name", "items"}`); `pinned` the pinned rows
 and pinned groups, interleaved as shown; `tabs` the rest. A group is `{"type": "group", "id", "name", "label" (the
-shown name, made from its tabs when `name` is empty), "icon" (an emoji, `symbol:<SF Symbol>`, `"none"` for No Icon,
-or null for the default), "color" (`neutral`, `none` or one of Chrome's nine), "collapsed", "pinned", "parent",
+shown name, made from its tabs when `name` is empty), "icon" (an emoji, `symbol:<SF Symbol>`, `"none"`, which draws
+the default folder like null, or null for the default), "color" (`neutral`, `none` or one of Chrome's nine), "collapsed", "pinned", "parent",
 "items"}`, its items its own tabs and child groups in order. A tab is `{"type": "tab", "id", "url", "title",
 "customTitle", "icon", "pin" (`tile`, `row` or null), "pinned" (also true in a pinned group), "folder", "group" (the
 innermost), "split", "active", "muted", "asleep", "index"}`; URLs and titles as in `windows` (internal pages
@@ -187,8 +199,8 @@ profile goes where the store puts moved tabs.
 | `tab.pin` / `tab.unpin` | `tabs`, `as`? (`tile`/`row`) | `pinTabs`; unpinning a tab of a pinned group takes it out (`placeTabs`), as Unpin does. A split's panes pin together, as rows: `as: "tile"` on one is `bad_request` |
 | `tab.activate` | `tab` | `activate` |
 | `tab.mute` / `tab.unmute` | `tabs` | `setMuted`; unmute also unmutes the site, as the menu does |
-| `tab.sleep` | `tabs` | Pinned tabs unload (`closeTabs`, as their ✕); others are discarded by Chrome. A tab is left alone (`shown`) when it, a pinned copy sharing its page, or a pane of its split is shown in any window. `outcomes`: `asleep`, `already`, `shown`, `refused`, `unsupported` |
-| `tab.wake` | `tabs` | Loads a sleeping tab in the background (`updateTab` with its woken page, or a reload for a discarded one). `outcomes`: `awake`, `already`, `failed` |
+| `tab.sleep` | `tabs` | Pinned tabs unload (`closeTabs`, as their ✕); others are discarded by Chrome. A tab is left alone (`shown`) when it, a pinned copy sharing its page, or a pane of its split is shown in any window. `outcomes`: `asleep`, `already`, `shown`, `refused`, `unsupported`. Each tab's discard has 10 s: past that the op fails (`failed`, "outcome unknown"; `changed` lists the tabs it did put to sleep) and the batch stops there, so a stuck engine call never holds up other clients' batches. The tab stays busy (`refused`) until the engine answers, it closes, control goes off or 60 s pass, and the next `apply` on the same connection reports that answer once under `late` |
+| `tab.wake` | `tabs` | Loads a sleeping tab in the background (`updateTab` with its woken page, or a reload for a discarded one). `outcomes`: `awake` (reloaded, view still attached), `loading` (its page was asked to load), `no_view` (its view is known gone), `reload_unverified` (reloaded, attachment can't be checked on this platform), `already`, `failed`. A reload has 10 s, as `tab.sleep`'s discard does |
 | `tab.close` | `tabs` | `closeTabs`: as ✕, so pinned tabs unload; never closes a window (a window left empty gets a New Tab) |
 | `tab.rename` / `tab.icon` | `tab`, `title` / `icon` (null resets) | `updateTab` `customTitle` / `customIcon`, as Rename… and Change Icon… |
 | `group.create` | `tabs`?, `urls`?, `window`?, `profile`?, `parent`?, `pinned`? (default true, like New Group with Tab), `name`?, `icon`?, `color`?, `collapsed`?, `before`?/`after`? | Opens `urls`, else one New Tab when no `tabs`; places them (out of their old groups, into the parent), `groupTabs`, then `updateGroup`. With no anchor and no parent, a group made from tabs of another group goes just above that group's outermost group (its first tab left), so groups made one after another from one group keep their creation order and the group, with the tabs left in it, stays below them; `group.ungroup` of it then leaves those tabs where they are, as the sidebar's Ungroup does. A group made from loose tabs goes where its first tab was. An anchor decides where the group goes, by the rule above: next to a pinned row or a top-level pinned group it is a pinned group there; next to a tab or group inside group P it is nested in P; next to a Top Apps tile it is refused; a `pinned` or `parent` that contradicts that is `bad_request`, before anything opens. Top Apps tiles in `tabs` are refused. The post-check covers its parent, pinned state and side of the anchor; if it fails, or a URL doesn't open (a `tab.opening` rule cancelled it: `refused`), the tabs it opened are closed again and the tabs it was given stay where they were moved (`error.changed`) |
@@ -210,11 +222,13 @@ profile goes where the store puts moved tabs.
   `bookmarks`, `downloads` or `newtab`. Never `javascript:`, `data:`, `blob:`, `view-source:`, `chrome:`, other
   `ardia://` pages (settings, flags, extensions…) or schemes that open other apps.
 - **Icons** are what the icon picker offers: an emoji from its list (`lib/emojiData.ts`), `symbol:<name>` (an SF
-  Symbol name, lowercase with dots), `"none"` (groups: No Icon) or null. Names are trimmed text of at most 200
+  Symbol name, lowercase with dots), `"none"` (No Icon: pinned rows, which then show their title alone; a group draws its folder) or null. Names are trimmed text of at most 200
   characters without control characters.
 - **Telemetry:** `usage_counts` carries `cli_tab_edits`, `cli_group_edits` (operations applied),
   `cli_edit_failures` (batches refused or stopped) and `cli_pill_shows` (times the control pill appeared: `run` and
-  DevTools sessions only, never `apply`); the CLI's `cli_command` has the subcommand and `batch_steps`.
+  DevTools sessions only, never `apply`); the CLI's `cli_command` has the subcommand and `batch_steps`. Every socket
+  request also counts once in `cli_socket_calls_<family>` and, when it answers an error, in `cli_socket_call_failures`
+  (`docs/control-socket.md`).
 
 ### Which commands
 
@@ -262,6 +276,13 @@ clipboard writes, internal pages). That is the point of it, and it is opt-in beh
 | `system.sleep`, `system.wake` * | none |
 | `user.idle`, `user.active` * | `idle` (threshold, s) |
 | `page.error` | `windowId`, `tabId`, `profile`, `url`, `status` |
+| `bookmarks.changed` | `profile`, `added`, `changed`, `removed` (bookmark ids, at most 1000 each), `count` |
+| `history.removed` | `profiles` (every profile sharing that history), `all`, `urls` (at most 1000 and 256 KB, minimized without `fullUrls`), `count`, `truncated` |
+| `download.changed` | `id`, `change` (`added`/`updated`/`removed`), `state`, `paused`, `dangerous`, `awaitsKeep`, `filename`, `profile` |
+| `profile.changed` | `profile`, `change` (`created`/`updated`/`removed`), `name`, `keys` (what changed, `default` when it became the default); or `change: "reordered"`, `order` |
+| `permission.prompted` | `windowId`, `tabId`, `id`, `origin`, `permissions`, `queued` |
+| `password.prompted` * | `windowId`, `tabId`, `origin`, `state`, `username`, `usernames` |
+| `menu.opened` | `id`, `kind` (`page`: a context menu a hidden Ardia captured), `windowId`, `tabId`, `items` (a count) |
 
 \* Named-only: `"*"` never includes them; a subscriber names each one. Notification text never goes into a hook's
 environment (no `ARDIA_TITLE`, no `ARDIA_URL`) and the runner never logs it.
@@ -277,6 +298,11 @@ environment (no `ARDIA_TITLE`, no `ARDIA_URL`) and the runner never logs it.
   stale. The web view reports the signal with each navigation update: the last committed URL (`committedUrl`), the
   time of the last document commit (`committedAt`) and the main frame's HTTP status (`httpStatus`); a new
   `committedAt` is a document navigation, a new URL alone is same-document.
+- `bookmarks.changed` is one event per profile per change, for a title, address, folder or order change, never for
+  a favicon or a profile's bookmarks loading. `history.removed` comes from the engine's history, so it covers
+  every way history goes (the History page, Clear Browsing Data, `history.*`, sync, Chrome's own expiry).
+  `download.changed` skips progress: it's sent when a download starts, finishes, fails, pauses, resumes or is
+  removed, or when it turns dangerous or waits to be kept.
 - `page.error` is sent once per committed main-frame document whose status is 400 to 599: never for subframes,
   same-document changes, cancelled or stale commits. Builds whose engine doesn't report `httpStatus` send none.
 - `app.launched` is recorded once per process, after the session is restored and the first window is up, with its
@@ -289,7 +315,10 @@ environment (no `ARDIA_TITLE`, no `ARDIA_URL`) and the runner never logs it.
   holds the quit open.
 - `tab.idle`: a tab is touched while it is the active tab of the focused window, and when it was last activated. It
   goes idle after the threshold without that (checked every 30 s) and fires once per idle stretch; `tab.resumed`
-  follows when it is shown again. Pinned tabs are included, with `pinned: true`.
+  follows when it is shown again. Moving a tab to another profile starts a new stretch without a `tab.resumed`. Pinned
+  tabs are included, with `pinned: true`. A connection that starts listening
+  for `tab.idle` at a threshold is sent the tabs already idle at it once, just after the `subscribe` reply; other
+  connections coming and going never send them again.
 - `system.sleep`, `system.wake`, `user.idle` and `user.active` come from the native system signals
   (`platform/systemSignals.ts`); an older build without them just sends none.
 
@@ -348,12 +377,12 @@ Hooks that answer before something happens, with a deadline after which Ardia do
   `"fullUrls": true`; a program that rewrites query parameters needs it. The runner trims again on its side.
 - **link.opening** decides before any tab exists. At every launch native holds incoming links (no early Little Ardia
   tab, no parked link tabs) until JS reports its link policy with `setHoldIncomingLinks(hold, hooksStamp)`: the app reports it
-  once its hooks are loaded and again on every change, `true` while an active `tab.opening` or `link.opening` hook
-  exists. `hooksStamp` is the stamp (device, inode, size, mtime, ctime) native returned with the hooks.json read the
+  once its hooks are loaded and again on every change, `true` while an active `tab.opening` or `link.opening` hook,
+  an enabled Air Traffic Control rule or an Everything Else choice exists. `hooksStamp` is the stamp (device, inode, size, mtime, ctime) native returned with the hooks.json read the
   rules came from, so a decision is never filed under a newer file; native keeps the fast-path fingerprint only when
-  that stamp is the file's current one. The fingerprint also covers config.json and `automation-approvals.json`, so
-  native takes its fast path before JS loads only when the last report said no hold and none of the three changed
-  since. A routed or rewritten link never adopts contents loaded for it
+  that stamp is the file's current one. The fingerprint also covers config.json, `automation-approvals.json` and
+  `air-traffic.json`, so native takes its fast path before JS loads only when the last report said no hold and none of
+  the four changed since. A routed or rewritten link never adopts contents loaded for it
   under another profile.
 - **Permissions.** A hook can deny or leave the normal prompt; `allow` means "show the prompt", never an unattended
   grant. A deny is answered on the engine's own request id and never remembered. A request dismissed or replaced
@@ -389,6 +418,55 @@ Hooks that answer before something happens, with a deadline after which Ardia do
 - **Floods.** At most 64 pending decisions (16 per runner connection), 200 hooks and 50 rewrite rules per hook; the
   runner runs at most 16 decide programs at once (4 per hook) and gives up at the deadline. Command hooks run at
   most 10 commands per 10 s each, so a hook that triggers itself stops.
+
+## Air Traffic Control
+
+Settings › Air Traffic Control is the same `link.opening` route engine with rules the user makes in Settings, kept in
+the data dir (`air-traffic.json`, version 2: an ordered `rules` list and a `fallback`), not in the config folder.
+
+- **Order.** For a link from another app (after `tab.opening` has had its say): the Settings rules from the top, the
+  first enabled one that fits answering; then the hooks.json `link.opening` hooks as above; then the Everything Else
+  choice when nothing answered (no hook fit, a route hook's profile is gone, or a program hook gave no answer in
+  time). With no Everything Else choice the link takes Ardia's usual routing.
+- **A rule** is `from` (an app by bundle id, or by name when it has none; `null` is any app), a link condition (`any`,
+  a `site` host that also takes its subdomains, matched as `*://*.<host>/*`, or a `pattern`), a profile
+  id (`null` is the profile used last) and `open` (`tab`, `window`, `littleArdia`). Profiles are stored by id, so a
+  rename keeps the rule; a rule or fallback whose profile was deleted, or is private, doesn't apply and the link
+  goes on down the list.
+- **Patterns.** A pattern with `://` (or `<all_urls>`) is a userscript match pattern. One without is a wildcard, case
+  blind, where `*` is any run of characters: with no `/` it matches the link's host (`*git*`, `*.github.com`), with one
+  it matches host, path and query (`github.com/ardia/*`), and one with no `*` matches anywhere in that text (`github`
+  is `*github*`). Spaces are refused.
+- **A tab group.** A rule (or Everything Else) that opens a profile as a tab may name one of that profile's tab groups
+  (`groupKey`: the group's pin key, or its id when it has none, so a pinned group keeps its key when its window closes
+  and comes back). The link opens as a tab in the group's copy in the window shown last, or in a new window of that
+  profile when the group is parked (a pinned group whose window closed), and the group expands if it was collapsed.
+  A rule (or Everything Else) whose group no longer exists in that profile still applies: the link opens as a plain tab
+  in the rule's profile, and its row in Settings says the group isn't open. A copy of the group in a window that is closing
+  doesn't count. The parser drops a `groupKey` without a profile or with another `open`, so the rule keeps working as a
+  plain tab.
+- **No approval.** The user makes these rules in Settings, so they count as approved. hooks.json route hooks still need
+  approval in Advanced › Automation; the pane lists them read-only with their state.
+- **The hold.** An enabled rule or an Everything Else choice turns the incoming-link hold on, reported again on every
+  change, so the native fast path never opens a link before the rules have seen it. `air-traffic.json` is in native's
+  fast-path fingerprint, so a file changed while Ardia was closed holds the first link of the next launch too. A
+  change is saved before the store takes it, so a save that fails changes neither the rules nor the hold.
+- **Versions.** Version 2 added `groupKey`; a version 1 file reads unchanged, its rules naming no group. A build from
+  before a version reads a newer file as no rules, since downgrades aren't supported.
+- **Source apps.** The app (bundle id, name) of the last 20 distinct apps that sent a link is kept in
+  `link-sources.json` for the app picker, on this Mac only and never sent.
+- **Try a Link** runs the same `traceOpening` and `traceLink` the real decision runs (`state/automation/decisions.ts`),
+  so it can't drift: a `tab.opening` rule that cancels or rewrites the link comes first, then it names the rule, hook,
+  Everything Else or usual routing that would take the link and where it would open, tab group included. A program
+  hook can't be asked without sending the link, so it shows what happens if the program doesn't answer.
+- Code: `state/airTraffic/rules.ts` (the pure matching and the saved document), `store.ts`, `sourceApps.ts`,
+  `preview.ts`, `groups.ts` (a profile's groups by key, their names and where they are) and `openAt.ts` (opening a
+  link in a group); `state/littleArdia/actions.ts` opens links from other apps; the pane is
+  `components/settings/panes/AirTraffic.tsx` with its sheet `AirTrafficSheet.tsx`.
+- Telemetry: `usage_counts.air_traffic_rule_links` and `air_traffic_fallback_links` (links from other apps) and
+  `air_traffic_group_links` (those that joined a tab group), and `settings_snapshot`'s `air_traffic_rules` (enabled
+  rules), `air_traffic_wildcard_rules` (enabled rules with a wildcard pattern), `air_traffic_group_rules` (enabled rules
+  that send into a group) and `air_traffic_fallback` (true or false).
 
 ## Approvals
 
@@ -556,6 +634,11 @@ The runner fires them and passes a `schedule.fired` event (it never comes from A
   `hooks.log.1`; stdout and stderr are drained as they come and a single line longer than 64 KB is cut. `hooks run`
   writes the log itself (`--log PATH`, `-` for the terminal), so the plist's `StandardOutPath` and
   `StandardErrorPath` are `/dev/null`: launchd would hold its own descriptor to the file and defeat the rotation.
+- On Linux, `hooks install` writes the systemd user service `dev.ardia.hooks.service` in
+  `${XDG_CONFIG_HOME:-~/.config}/systemd/user` instead (the same command line and environment, `Restart=on-failure`,
+  `RestartSec=10`, `StartLimitIntervalSec=0`, output to `/dev/null` for the same reason), then runs
+  `systemctl --user daemon-reload`, `enable` and `restart`. `uninstall` disables and stops it and removes the unit,
+  and `hooks list` reads `systemctl --user show`. The log is `${XDG_STATE_HOME:-~/.local/state}/ardia/hooks.log`.
 
 ## Tests
 

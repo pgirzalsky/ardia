@@ -59,7 +59,9 @@ export function toolbarMode(i: ToolbarModeInput): ToolbarMode {
   return i.peek ? "peek" : "collapsed";
 }
 
-useBrowser.subscribe((s, prev) => {
+export const addressFieldShownIn = (mode: ToolbarMode) => mode !== "collapsed";
+
+useBrowser.subscribeTo(["settings", "tabs"], (s, prev) => {
   if (prev.settings.hideToolbarWhileScrolling && !s.settings.hideToolbarWhileScrolling) useToolbarAutoHide.setState({ scrolledDown: {}, peek: {} });
   if (s.tabs === prev.tabs) return;
   const { scrolledDown, peek } = useToolbarAutoHide.getState();

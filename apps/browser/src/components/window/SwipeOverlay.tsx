@@ -11,15 +11,19 @@ import { Favicon, NewTabIcon } from "../favicon/Favicon";
 import { HISTORY_MENU_WIDTH, underButton, HistoryPopover } from "./HistoryPopover";
 import { goBack, goForward, goToHistoryItem, historyFavicons, historyItems, openHistoryMenu, useHistoryAvailability, useHistoryMenu, type HistoryItem } from "../../state/tabs/navigation";
 import { historyMenuLeft, type PageAnchor } from "./pageAnchors";
+import { useSwipeClose } from "./swipeClose";
 import {
   CAPSULE_INSET,
   CAPSULE_SIZE,
   CAPSULE_SIZE_CONFIRMED,
   capsuleOffset,
   LIST_ROW,
+  LIST_FOLD_PROGRESS,
   listSelection,
   swipeProgress,
 } from "./swipeMotion";
+import { noteSwipeHistoryList } from "../../state/telemetry/swipeHistoryListCounts";
+import { consentToken } from "../../state/telemetry/client";
 
 const SIZE = CAPSULE_SIZE;
 const SIZE_CONFIRMED = CAPSULE_SIZE_CONFIRMED;
@@ -28,7 +32,6 @@ const ICON_CONFIRMED = 34;
 const LIST_WIDTH = 200;
 const ROW = LIST_ROW;
 const LIST_PAD = space.m;
-const LIST_RADIUS = radius.sheet;
 const LIST_IDLE_MS = 300;
 
 function spring(value: Animated.Value, toValue: number, spec: SpringSpec, native = false) {
@@ -57,6 +60,8 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
   const sizeRef = useRef({ width: 0, height: 0 });
   const [shown, setShown] = useState<Shown | null>(null);
   const area = useRef<SwipeAreaHandle>(null);
+  const swipeClose = useSwipeClose();
+  const closing = useRef(false);
 
   const g = useRef({
     active: false,
@@ -129,6 +134,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
 
   const presentList = async () => {
     const gesture = g.items;
+    const consent = consentToken();
     const items = (await gesture) ?? [];
     if (g.items !== gesture || !g.active || g.list || !g.confirmed || items.length < 2) return;
     const { height } = sizeRef.current;
@@ -139,9 +145,19 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     g.listY = lastDy.current;
     swipeHaptic("generic");
     v.pill.setValue(rowsAboveSelected(list.length, 0) * ROW);
-    layoutTo(LIST_WIDTH, list.length * ROW + LIST_PAD * 2, listTop(height, list.length, 0), LIST_RADIUS);
+    layoutTo(LIST_WIDTH, list.length * ROW + LIST_PAD * 2, listTop(height, list.length, 0), radius.sheet);
     Animated.timing(v.list, { toValue: 1, ...SWIPE_MOTION.list, useNativeDriver: true }).start();
     setShown((s) => (s ? { ...s, list, selected: 0 } : s));
+    noteSwipeHistoryList("opened", consent);
+  };
+
+  const foldList = () => {
+    g.list = null;
+    g.selected = 0;
+    v.nudge.setValue(0);
+    Animated.timing(v.list, { toValue: 0, ...SWIPE_MOTION.list, useNativeDriver: true }).start();
+    setShown((s) => (s ? { ...s, list: null, selected: 0 } : s));
+    noteSwipeHistoryList("folded");
   };
 
   const select = (dy: number) => {
@@ -169,6 +185,8 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
 
   const lastDy = useRef(0);
   const onSwipe = (e: SwipeEvent) => {
+    if (e.phase === "began" || e.phase === "swipe") closing.current = !!swipeClose && e.direction === "back" && !history.back;
+    if (closing.current) return swipeClose?.(e);
     lastDy.current = e.dy;
     if (e.phase === "began" || e.phase === "swipe") {
       resetValues(e.direction);
@@ -190,6 +208,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
     }
 
     const progress = swipeProgress(e.distance);
+    if (g.list && progress < LIST_FOLD_PROGRESS) foldList();
     if (g.list) select(e.dy);
     else setConfirmed(progress >= 1);
     v.x.setValue(capsuleOffset(progress, g.width));
@@ -208,6 +227,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
   useSwipeDevHandle(tabId, area);
 
   const back = shown?.direction !== "forward";
+  const icon = back && history.backCloses ? "xmark" : back ? "chevron.left" : "chevron.right";
   const iconOpacity = Animated.multiply(v.confirm.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }), v.list.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }));
 
   return (
@@ -215,7 +235,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
       <SwipeArea
         ref={area}
         style={StyleSheet.absoluteFill}
-        canSwipeBack={history.back}
+        canSwipeBack={history.back || !!swipeClose}
         canSwipeForward={history.forward}
         allowsVerticalMotion={!!shown?.list}
         onSwipe={onSwipe}
@@ -235,7 +255,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
           <Animated.View style={{ ...StyleSheet.absoluteFillObject, opacity: v.fade, transform: [{ scale: v.scale }] }}>
             <Surface
               style={StyleSheet.absoluteFill}
-              cornerRadius={shown.list ? LIST_RADIUS : (shown.confirmed ? SIZE_CONFIRMED : SIZE) / 2}
+              cornerRadius={shown.list ? radius.sheet : (shown.confirmed ? SIZE_CONFIRMED : SIZE) / 2}
               shadowColor={SHADOWS.swipe.color}
               shadowOpacity={theme.dark ? SHADOWS.swipe.opacity.dark : SHADOWS.swipe.opacity.light}
               shadowRadius={SHADOWS.swipe.radius}
@@ -246,7 +266,7 @@ export function SwipeOverlay({ tabId }: { tabId: string }) {
               {!theme.dark && <Animated.View style={{ ...StyleSheet.absoluteFillObject, backgroundColor: SWIPE_CONFIRMED_WASH, opacity: v.confirm }} />}
               <Animated.View style={{ ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", opacity: iconOpacity }}>
                 <Animated.View style={{ transform: [{ scale: v.icon }] }}>
-                  <Symbol name={back ? "chevron.left" : "chevron.right"} size={ICON} weight="bold" color={colors.swipeChevron} style={{ width: ICON + 6, height: ICON + 6 }} />
+                  <Symbol name={icon} size={ICON} weight="bold" color={colors.swipeChevron} style={{ width: ICON + 6, height: ICON + 6 }} />
                 </Animated.View>
               </Animated.View>
               {shown.list && <DestinationList tabId={tabId} items={shown.list} selected={shown.selected} appear={v.list} pill={v.pill} />}
@@ -289,7 +309,7 @@ function DestinationList({ tabId, items, selected, appear, pill }: { tabId: stri
           right: space.m,
           top: LIST_PAD,
           height: ROW,
-          borderRadius: concentric(LIST_RADIUS, space.m),
+          borderRadius: concentric(radius.sheet, space.m),
           backgroundColor: windowColors(theme.dark).swipeSelection,
           transform: [{ translateY: pill }],
         }}

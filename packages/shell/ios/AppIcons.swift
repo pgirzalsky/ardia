@@ -45,11 +45,16 @@ enum AppIcons {
     }
   }
 
-  static var shown: String { IconStyle.shown(saved: current, theme: IconStyle.systemTheme) }
+  static var shown: String { IconStyle.shown(saved: current, theme: IconStyle.systemTheme, bundleIcon: IconStyle.bundleIcon) }
 
   private static func apply() {
+    let bundleImageBeforeAnyOverride = ApplicationIconName.bundleImage
     let id = shown
-    NSApp.applicationIconImage = id == "default" ? nil : image(id, size: 512)
+    let custom = id == "default" ? nil : image(id, size: 512)
+    NSApp.applicationIconImage = custom
+    if !ApplicationIconName.register(custom ?? bundleImageBeforeAnyOverride) {
+      NSLog("Ardia: couldn't name the \(id) app icon \(ApplicationIconName.name); Chromium's Dock tile draws the bundle icon")
+    }
   }
 
   private static var cache: [String: NSImage] = [:]
@@ -94,7 +99,7 @@ enum AppIcons {
       path.lineWidth = max(1, rect.width / 512)
       path.stroke()
       path.addClip()
-      artwork.draw(in: body.insetBy(dx: body.width * 0.06, dy: body.width * 0.06))
+      artwork.draw(in: body)
       return true
     }
     cache[key] = image

@@ -4,19 +4,15 @@ import { useShallow } from "zustand/react/shallow";
 import { openLiveItem } from "../../state/live/engine";
 import { useLive } from "../../state/live/store";
 import type { CompletedItem } from "../../state/live/types";
-import { space, Symbol, Text } from "../ui";
+import { perLook, space, Symbol, Text } from "../ui";
 import { layout, useTheme } from "../ui/theme";
 import { useLiveColors } from "../live/tokens";
 import { Fold, useFold } from "./Fold";
 import { COMPLETION_GLYPH } from "./LiveItemRow";
 import { SidebarListRow, SidebarRowLabel } from "./SidebarRow";
 import { TAB_ROW } from "./tokens";
-import { onLayoutMode } from "../../lib/layoutMode";
 
-const LABEL = { marginLeft: TAB_ROW.titleGap };
-onLayoutMode(() => {
-  LABEL.marginLeft = TAB_ROW.titleGap;
-});
+const label = perLook(() => ({ marginLeft: TAB_ROW.titleGap }));
 const DONE_ROW = { opacity: 0.75 } as const;
 
 const NONE: string[] = [];
@@ -53,7 +49,7 @@ export function CompletedFooter({ folderId, windowId }: { folderId: string; wind
     <View onMouseEnter={enter} onMouseLeave={leave}>
       <SidebarListRow height={24} fill={open ? theme.rowHover : undefined}>
         <Symbol name="checkmark.circle" size={11} color={theme.textSecondary} style={{ width: 16, height: 16 }} />
-        <Text size="small" tone="textSecondary" style={LABEL}>
+        <Text size="small" tone="textSecondary" style={label()}>
           {shown.length} Completed
         </Text>
       </SidebarListRow>

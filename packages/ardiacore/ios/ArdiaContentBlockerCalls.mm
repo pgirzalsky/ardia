@@ -12,6 +12,7 @@ using namespace ardia_content_blocker;
 @property BOOL failNext;
 @property NSTimeInterval deadline;
 @property NSUInteger attempt;
+@property BOOL loadsProfile;
 @end
 
 @implementation ArdiaContentBlockerOp
@@ -151,6 +152,7 @@ NSString *const kPrelude =
      "  return l;"
      "});"
      "const selected = (l) => Object.keys(l.available).filter((k) => l.available[k] && l.available[k].off !== true);"
+     "const imported = (l) => Object.keys(l.available).filter((k) => l.available[k] && l.available[k].group === 'custom').sort();"
      "const covers = (directive, host) => !directive.includes('/') && (host === directive || host.endsWith('.' + directive));"
      "const sameSet = (a, b) => [...a].sort().join('\\n') === [...b].sort().join('\\n');"
      "const storageCall = (name, arg) => expired ? Promise.reject(new Error(`storage ${name}: timed out`))"
@@ -161,12 +163,13 @@ NSString *const kPrelude =
      "const reloadLists = () => pendingReload().then((asked) => send({what: 'reloadAllFilters'})"
      "  .then(pendingReload)"
      "  .then((now) => now === asked ? local.remove('ardiaReloadPending') : reloadLists()));"
-     "const reloadWait = () => new Promise((resolve) => setTimeout(resolve, Math.min(%@, Math.max(0, left() - 1000))));"
+     "const reloadWait = (ms = %@) => new Promise((resolve) => setTimeout(resolve, Math.min(ms, Math.max(0, left() - 1000))));"
      "const askReload = () => local.set({ardiaReloadPending: `${Date.now()}-${Math.random()}`});"
-     "const applyLists = (toSelect) => askReload()"
-     "  .then(() => send({what: 'applyFilterListSelection', toSelect}))"
+     "const applySelection = (details, waitMs) => askReload()"
+     "  .then(() => send({what: 'applyFilterListSelection', ...details}))"
      "  .then(askReload)"
-     "  .then(() => Promise.race([reloadLists(), reloadWait()]));"
+     "  .then(() => Promise.race([reloadLists(), reloadWait(waitMs)]));"
+     "const applyLists = (toSelect) => applySelection({toSelect});"
      "const resumePendingReload = () => { pendingReload().then((asked) => asked ? reloadLists() : null).catch(() => {}); };"
      "Promise.resolve().then(() => { if (location.origin !== extensionOrigin) throw new Error(`not the extension page: ${location.href}`); })"
      ".then(() => withDeadline(ready(), 'uBlock Origin'))"
@@ -223,7 +226,9 @@ bool Retriable(NSString *error, ArdiaContentBlockerPage *page) {
 void Attempt(ArdiaContentBlockerOp *op) {
   NSString *profile = op.profile;
   if (!ArdiaHost.isStarted) return Finish(op, nil, @"unavailable");
+  ForgetIfGone(profile);
   if (![LoadedProfiles() containsObject:profile]) {
+    if (!op.loadsProfile) return Finish(op, nil, @"profile gone");
     return LoadIntoProfile(profile, ^(NSString *error) {
       if (error) Finish(op, nil, error);
       else Attempt(op);
@@ -270,8 +275,9 @@ void Pump(NSString *profile) {
 
 namespace ardia_content_blocker {
 
-void Call(NSString *profile, NSString *expression, void (^completion)(id value, NSString *error)) {
+void Call(NSString *profile, NSString *expression, void (^completion)(id value, NSString *error), bool loadsProfile) {
   ArdiaContentBlockerOp *op = [ArdiaContentBlockerOp new];
+  op.loadsProfile = loadsProfile;
   op.profile = profile;
   op.expression = expression;
   op.completion = completion;

@@ -1,9 +1,9 @@
 import type { BarPlacement } from "../omnibox/barPlacement";
 import type { TabGroupColor } from "@ardia/core";
 import type { PageEngine } from "../../platform/tabs";
-import type { ProfileColor, ProfileTheme } from "../../lib/profileLook";
+import type { PresetThemes, ProfileColor, ProfileTheme } from "../../lib/profileLook";
 
-export type { ProfileColor, ProfileTheme, ThemeColor, ThemeLook, ThemeStop } from "../../lib/profileLook";
+export type { PresetThemes, ProfileColor, ProfileTheme, ThemeColor, ThemeLook, ThemeStop } from "../../lib/profileLook";
 export type { ThemeMode, ThemeTexture } from "@ardia/core";
 
 export type Frame = [number, number, number, number];
@@ -13,11 +13,17 @@ export type Profile = {
   name: string;
   color: ProfileColor;
   icon: string | null;
+  switcherDot?: true;
   createdAt: number;
   dataId?: string;
   theme?: ProfileTheme | null;
+  presetThemes?: PresetThemes;
+  seenTheme?: ProfileTheme | null;
+  seenColor?: ProfileColor;
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
+  syncTabs?: true;
+  passwordManager?: string;
 };
 
 type WindowBase = {
@@ -26,15 +32,19 @@ type WindowBase = {
   tabIds: string[];
   activeTabIds: Record<string, string>;
   tabLayout?: "sidebar" | "top";
+  autoHideTabs?: boolean;
   frame: Frame | null;
+  restoredFrame?: Frame;
+  maximized?: boolean;
   fullScreen?: number;
+  display?: string;
   createdAt: number;
 };
 
 export type BrowserWindow =
-  | (WindowBase & { kind: "main"; chromeWindow?: string })
+  | (WindowBase & { kind: "main"; chromeWindow?: string; opensBehind?: string })
   | (WindowBase & { kind: "private"; chromeWindow?: string })
-  | (WindowBase & { kind: "small"; linkPointer?: [number, number] });
+  | (WindowBase & { kind: "small"; linkPointer?: [number, number]; linkApp?: string });
 
 export type WindowKind = BrowserWindow["kind"];
 export type MainWindow = Extract<BrowserWindow, { kind: "main" }>;
@@ -54,9 +64,11 @@ export type Tab = {
   pinnedUrl: string | null;
   page: TabPage;
   openerId: string | null;
-  liveItem?: { folderId: string; itemId: string };
+  linkOpenerId?: string;
+  liveItem?: { folderId: string; itemId: string; completed?: true };
   pinKey?: string;
   engine?: PageEngine;
+  chromeOpened?: true;
   createdAt: number;
   lastActiveAt: number;
   restoredAt?: number;
@@ -149,19 +161,21 @@ export type ClosedTab = {
   tab: TabSnapshot;
   tabId?: string;
   restoreFrom?: string;
+  closeBatch?: string;
   windowId: string;
   index: number;
   group: ClosedGroupInfo | null;
   parents?: ClosedGroupInfo[];
   closedAt: number;
   pinnedTile?: boolean;
+  pinKey?: string;
   small?: boolean;
 };
 
 export type ClosedWindow = {
   kind: "window";
   id: string;
-  window: Pick<BrowserWindow, "profileId" | "frame" | "tabLayout">;
+  window: Pick<BrowserWindow, "profileId" | "frame" | "restoredFrame" | "maximized" | "tabLayout" | "autoHideTabs">;
   tabs: (TabSnapshot & { active: boolean; tabId?: string })[];
   groups: (Omit<TabGroup, "tabIds" | "windowId" | "shownTabIds"> & { tabIndexes: number[] })[];
   splits?: Pick<SplitView, "orientation" | "slots">[];

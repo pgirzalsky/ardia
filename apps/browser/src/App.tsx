@@ -1,13 +1,18 @@
 import { WindowBackdrop } from "./components/ui";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StyleSheet } from "react-native";
 import { CommandPanel } from "./components/omnibox/CommandPanel";
+import { windowOverlays } from "./components/window/WindowOverlays";
 import { ContentCard } from "./components/window/ContentCard";
+import { browserWindowControls } from "./components/window/BrowserWindowControls";
 import { BookmarkDialog } from "./components/bookmarks/BookmarkDialog";
 import { EditBookmarkDialog } from "./components/bookmarks/EditBookmarkDialog";
 import { FolderMenus } from "./components/bookmarks/FolderMenus";
 import { ExtensionOverlays } from "./components/extensions/ExtensionOverlays";
 import { ExtensionSidePanel } from "./components/extensions/SidePanel";
+import { PluginSidePanel } from "./components/plugins/PluginSidePanel";
+import { PluginOverlays } from "./components/plugins/PluginOverlays";
+import { PLUGIN_CHROME, PluginChromeContext, usePluginChrome, usePluginChromeOf } from "./state/plugins/chrome";
 import { CrxDropArea } from "./components/extensions/CrxDropArea";
 import { DownloadMagnet, DownloadsPopover } from "./components/downloads/Downloads";
 import { UtilityWindow } from "./components/settings/UtilityWindow";
@@ -17,7 +22,7 @@ import { CreateProfileHost } from "./components/profiles/CreateProfile";
 import { useFullscreenTab } from "./state/tabs/pageState";
 import { ProfileTint } from "./components/window/ProfileSwipe";
 import { TOP_STRIP_HEIGHT, TopStripPeek, TopTabStrip } from "./components/tabstrip/TopTabStrip";
-import { usePageFrameInset, useTabLayout } from "./state/windows/layout";
+import { useCardTopInset, usePageFrameInset, useTabLayout } from "./state/windows/layout";
 import { WindowProfile } from "./components/window/WindowProfile";
 import { DockedLayout } from "./components/window/SidebarDock";
 import { LittleArdiaWindow } from "./components/littleArdia/LittleArdiaWindow";
@@ -26,21 +31,16 @@ import { ReportSheetHost } from "./components/report/ReportSheet";
 import { profileAccent, profileTheme, useTheme } from "./components/ui/theme";
 import { ThemeScope } from "./components/window/ThemeScope";
 import { useBrowser } from "./state/browser/store";
-import { useLayoutEpoch } from "./lib/layoutMode";
 import { useWindowId, WindowContext } from "./state/browser/hooks";
 import { provideProfileLooks } from "./state/profiles/looks";
 import { currentBasePalette } from "./state/config/basePalette";
 import { focusedWindowOf } from "./state/windows/ui";
 import { SETTLE_MS, useSettled } from "./components/ui/useSettled";
+import { forgetWindowRootSize, setWindowRootSize } from "./state/windows/rootSize";
 
 provideProfileLooks({ accent: profileAccent, theme: (profile, appDark, source) => profileTheme(profile, appDark, source, currentBasePalette()) });
 
 export function WindowRoot({ windowId }: { windowId?: string }) {
-  const epoch = useLayoutEpoch((s) => s.epoch);
-  return <WindowRootBody key={epoch} windowId={windowId} />;
-}
-
-function WindowRootBody({ windowId }: { windowId?: string }) {
   if (isUtilityWindowId(windowId))
     return (
       <ThemeScope>
@@ -54,10 +54,13 @@ function BrowserWindowRoot({ windowId }: { windowId?: string }) {
   const id = useBrowser((s) => windowId ?? focusedWindowOf(s) ?? s.windowOrder[0] ?? null);
   const exists = useBrowser((s) => !!id && !!s.windows[id]);
   const small = useBrowser((s) => !!id && s.windows[id]?.kind === "small");
+  const pluginChrome = usePluginChromeOf(id ?? "");
   if (!id || !exists) return null;
   return (
     <WindowContext.Provider value={id}>
-      <ThemeScope>{small ? <LittleArdiaWindow /> : <BrowserWindow />}</ThemeScope>
+      <PluginChromeContext.Provider value={small ? pluginChrome & PLUGIN_CHROME.verificationCodes : pluginChrome}>
+        <ThemeScope>{small ? <LittleArdiaWindow /> : <BrowserWindow />}</ThemeScope>
+      </PluginChromeContext.Provider>
     </WindowContext.Provider>
   );
 }
@@ -67,28 +70,33 @@ function BrowserWindow() {
   const windowId = useWindowId();
   const topTabs = useTabLayout() === "top";
   const fullscreen = !!useFullscreenTab(windowId);
+  const pluginPanels = usePluginChrome(PLUGIN_CHROME.panels);
+  const pluginOverlays = usePluginChrome(PLUGIN_CHROME.overlays);
   const frame = usePageFrameInset();
+  const cardTop = useCardTopInset(frame);
   const [width, setWidth] = useState(0);
   const settleWidth = useSettled(setWidth, topTabs ? 0 : SETTLE_MS);
+  useEffect(() => () => forgetWindowRootSize(windowId), [windowId]);
   const card = useMemo(
     () => (
       <>
         <ContentCard />
         {!fullscreen && <ExtensionSidePanel />}
+        {pluginPanels ? <PluginSidePanel hidden={fullscreen} /> : null}
       </>
     ),
-    [fullscreen],
+    [fullscreen, pluginPanels],
   );
 
   return (
-    <CrxDropArea style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => settleWidth(e.nativeEvent.layout.width)}>
+    <CrxDropArea style={{ flex: 1, flexDirection: "row" }} onLayout={(e) => (setWindowRootSize(windowId, e.nativeEvent.layout.width, e.nativeEvent.layout.height), settleWidth(e.nativeEvent.layout.width))}>
       <WindowBackdrop vibrancy {...theme.backdrop} colors={theme.windowTint} grainOpacity={theme.grain} style={StyleSheet.absoluteFill} />
       <WindowProfile />
       <ProfileTint />
       <DockedLayout
         fullscreen={fullscreen}
         topTabs={topTabs}
-        inset={{ top: topTabs ? TOP_STRIP_HEIGHT : frame, right: frame, bottom: frame, left: frame }}
+        inset={{ top: topTabs ? TOP_STRIP_HEIGHT : cardTop, right: frame, bottom: frame, left: frame }}
         windowWidth={width}
         topStrip={
           topTabs
@@ -99,16 +107,22 @@ function BrowserWindow() {
         {card}
       </DockedLayout>
       <CommandPanel windowWidth={width} />
-      <FolderMenus />
-      <DownloadsPopover />
-      <ExtensionOverlays />
-      <DownloadMagnet />
-      <BookmarkDialog />
-      <EditBookmarkDialog />
-      <CreateProfileHost />
-      <SidebarOverlays windowWidth={width} />
+      {windowOverlays(
+        <>
+          <FolderMenus />
+          <DownloadsPopover />
+          <ExtensionOverlays />
+          {pluginOverlays ? <PluginOverlays /> : null}
+          <DownloadMagnet />
+          <BookmarkDialog />
+          <EditBookmarkDialog />
+          <CreateProfileHost />
+          <SidebarOverlays windowWidth={width} />
+        </>,
+      )}
       <OnboardingOverlay />
-      <ReportSheetHost />
+      {windowOverlays(<ReportSheetHost />)}
+      {browserWindowControls()}
     </CrxDropArea>
   );
 }

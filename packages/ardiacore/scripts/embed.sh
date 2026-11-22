@@ -5,6 +5,7 @@ repo=$(cd "$here/../../.." && pwd)
 staged=${ARDIACORE_STAGE_DIR:-$repo/apps/browser/build-ardiacore/ArdiaCoreFramework}/"Chromium Framework.framework"
 frameworks="$TARGET_BUILD_DIR/$FRAMEWORKS_FOLDER_PATH"
 mkdir -p "$frameworks"
+rm -rf "$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/ArdiaFairPlay.app"
 stamp="$DERIVED_FILE_DIR/ardiacore-embedded.stamp"
 mkdir -p "$DERIVED_FILE_DIR"
 identity="${EXPANDED_CODE_SIGN_IDENTITY:--}"
@@ -48,4 +49,10 @@ fi
 rules="$repo/packages/ardiacore/vendor/ubol-webkit/rules"
 if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ] && [ -f "$rules/rulesets.json" ]; then
   rsync -a --delete "$rules/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/ContentRules/"
+fi
+
+"$here/hsts-preload.sh"
+hsts="$repo/packages/ardiacore/vendor/hsts-preload/hosts"
+if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ] && [ -f "$hsts/subdomains.hosts" ]; then
+  rsync -a --delete "$hsts/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/HSTS/"
 fi

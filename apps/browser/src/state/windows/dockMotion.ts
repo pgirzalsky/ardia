@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { CARD_INSET } from "../../lib/windowLayout";
 import { compactLift, toolbarRowOf } from "../../lib/toolbarRow";
 import type { LightsPlace } from "../../platform/windows";
+import { snappedToDevicePixels } from "../settings/interfaceScale";
 
 const LIGHTS_X = 25;
 const LIGHTS_BELOW_CARD_TOP = 21;
@@ -17,7 +18,7 @@ export const ARC_LIGHTS_CENTER: readonly [number, number] = [25, 24];
 export const TOP_STRIP_LIGHTS_CENTER: readonly [number, number] = [20.75, 20.75];
 
 export function lightsCenter(offset: number, down = 0, base: readonly [number, number] = LIGHTS_CENTER): [number, number] {
-  const dx = Math.round(offset * 2) / 2;
+  const dx = snappedToDevicePixels(offset);
   return [base[0] - dx, base[1] + down];
 }
 
@@ -26,6 +27,11 @@ export function sidebarLightsCenter(right: boolean, width: number, offset: numbe
   const [x, y] = lightsCenter(-offset, down, base);
   return [width - x, y, "right"];
 }
+
+const LIGHTS_REACH = 80;
+export const lightsOffWindow = (place: LightsPlace) => (place[2] === "right" ? place[0] <= -LIGHTS_REACH / 4 : place[0] + LIGHTS_REACH <= 0);
+export const stillOffWindow = (from: LightsPlace | undefined, to: LightsPlace) =>
+  !!from && from[1] === to[1] && from[2] === to[2] && lightsOffWindow(from) && lightsOffWindow(to);
 
 export type PeekSpan = readonly [from: number, to: number];
 
@@ -73,4 +79,5 @@ export const sidebarSliding = (windowId: string) => {
   return !!m.moving[windowId] || !!m.leaving[windowId];
 };
 export const usePeekSpan = (windowId: string): PeekSpan | undefined => useDockMotion((m) => m.peeks[windowId]);
+export const usePeekLeaving = (windowId: string): boolean => useDockMotion((m) => !!m.leaving[windowId]);
 export const devPeeks: Record<string, { show(): void; hide(): void }> = {};

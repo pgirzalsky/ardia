@@ -35,6 +35,7 @@ export const APP_EVENTS = [
   "app_launched",
   "app_session_ended",
   "app_updated",
+  "autofill_toggle_kept",
   "calendar_connect",
   "command_bar_opened",
   "extension_installed",
@@ -55,6 +56,9 @@ export const APP_EVENTS = [
   "usage_counts",
 ];
 export const APP = `(event IN (${sqlList(APP_EVENTS)}) AND ${APP_SOURCE})`;
+export const PHONE_APP_SOURCES = ["ardia-phone"];
+export const PHONE_APP_LIBS = ["ardia-phone-telemetry"];
+export const PHONE_APP_SOURCE = `(source IN (${sqlList(PHONE_APP_SOURCES)}) AND ${prop("$lib")} IN (${sqlList(PHONE_APP_LIBS)}))`;
 export const MAC = `(${visitorOnSql("mac", prop)})`;
 export const PHONE = `(${visitorOnSql("phone", prop)})`;
 export const ARDIA_VERSION = `match(${prop("version")}, '^0\\\\.[0-9]+\\\\.[0-9]+(-nightly\\\\.[0-9]+)?$')`;
